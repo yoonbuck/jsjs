@@ -30,12 +30,14 @@ function defineGlobal(realm, name, value) {
 const OBJECT_TARGET_SIGNATURES = Object.freeze([
   ['defineProperty', 3],
   ['deleteProperty', 2],
+  ['get', 2],
   ['getOwnPropertyDescriptor', 2],
   ['getPrototypeOf', 1],
   ['has', 2],
   ['isExtensible', 1],
   ['ownKeys', 1],
   ['preventExtensions', 1],
+  ['set', 3],
   ['setPrototypeOf', 2],
 ]);
 
@@ -229,6 +231,88 @@ const tests = [
     },
   },
   {
+    name: 'Reflect get and set distinguish omitted from explicit undefined receivers',
+    run() {
+      const realm = createRealm();
+      const exotic = new HostileExotic(
+        realm.intrinsics.objectPrototype,
+        undefined,
+      );
+      exotic.setResult = true;
+      defineGlobal(realm, 'hostile', exotic);
+
+      assertSame(
+        evaluateScript(realm, 'Reflect.get(hostile, "x");').value,
+        'get:x',
+      );
+      assertSame(
+        evaluateScript(realm, 'Reflect.get(hostile, "x", undefined);').value,
+        'get:x',
+      );
+      assertSame(
+        evaluateScript(realm, 'Reflect.set(hostile, "x", 1);').value,
+        true,
+      );
+      assertSame(
+        evaluateScript(realm, 'Reflect.set(hostile, "x", 2, undefined);').value,
+        true,
+      );
+
+      assertSame(exotic.calls[0][2], exotic);
+      assertSame(exotic.calls[1][2], undefined);
+      assertSame(exotic.calls[2][3], exotic);
+      assertSame(exotic.calls[3][3], undefined);
+
+      assertSame(
+        run(
+          'var target = {y: 42};' +
+            'Object.defineProperty(target, "x", {' +
+            'get: function () { "use strict"; return this; }' +
+            '});' +
+            '(Reflect.get(target, "x") === target) + ":" +' +
+            '(Reflect.get(target, "x", undefined) === undefined);',
+        ),
+        'true:true',
+      );
+      assertSame(
+        run(
+          'var target = {x: 1};' +
+            'Reflect.set(target, "x", 2, "primitive") + ":" + target.x;',
+        ),
+        'false:1',
+      );
+      assertSame(
+        run(
+          'var receiver;' +
+            'var target = {};' +
+            'Object.defineProperty(target, "x", {' +
+            'set: function (value) { "use strict"; receiver = this; }' +
+            '});' +
+            'Reflect.set(target, "x", 1, undefined) + ":" +' +
+            '(receiver === undefined);',
+        ),
+        'true:true',
+      );
+      assertSame(
+        run(
+          'var key = Symbol("key"); var target = {};' +
+            'Reflect.set(target, key, 9) + ":" + Reflect.get(target, key);',
+        ),
+        'true:9',
+      );
+      assertSame(
+        run(
+          'var calls = 0;' +
+            'var key = {toString: function () { calls += 1; return "x"; }};' +
+            'try { Reflect.get(1, key); } catch (error) {}' +
+            'try { Reflect.set(1, key, 2); } catch (error) {}' +
+            'calls;',
+        ),
+        0,
+      );
+    },
+  },
+  {
     name: 'Reflect keyed methods preserve validation and descriptor ordering',
     run() {
       assertSame(
@@ -299,56 +383,158 @@ const tests = [
     },
   },
   {
-    name: 'Reflect dispatches descriptor and boolean methods through Table 5',
+    name: 'Reflect methods use the detached method Realm for validation, allocation, and abrupt propagation',
+    run() {
+      for (const separateAgents of [false, true]) {
+        const callerAgent = createAgent();
+        const methodAgent = separateAgents ? createAgent() : callerAgent;
+        const callerRealm = createRealm({ agent: callerAgent });
+        const methodRealm = createRealm({ agent: methodAgent });
+        const reflect = /** @type {EngineObject} */ (
+          methodRealm.intrinsics.reflectObject
+        );
+        const target = new EngineObject(callerRealm.intrinsics.objectPrototype);
+        target.defineOwnProperty('x', {
+          value: 1,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+
+        defineGlobal(callerRealm, 'foreignGet', reflect.get('get', reflect));
+        defineGlobal(
+          callerRealm,
+          'foreignGetOwnPropertyDescriptor',
+          reflect.get('getOwnPropertyDescriptor', reflect),
+        );
+        defineGlobal(
+          callerRealm,
+          'foreignDefineProperty',
+          reflect.get('defineProperty', reflect),
+        );
+        defineGlobal(
+          callerRealm,
+          'foreignOwnKeys',
+          reflect.get('ownKeys', reflect),
+        );
+        defineGlobal(callerRealm, 'target', target);
+
+        const error = evaluateScript(
+          callerRealm,
+          'var caught; try { foreignGet(1, "x"); }' +
+            'catch (value) { caught = value; } caught;',
+        ).value;
+        assertSame(
+          /** @type {EngineObject} */ (error).getPrototypeOf(),
+          methodRealm.intrinsics.typeErrorPrototype,
+        );
+
+        const descriptorError = evaluateScript(
+          callerRealm,
+          'var caught; try {' +
+            'foreignDefineProperty(target, "bad", {get: 1});' +
+            '} catch (value) { caught = value; } caught;',
+        ).value;
+        assertSame(
+          /** @type {EngineObject} */ (descriptorError).getPrototypeOf(),
+          methodRealm.intrinsics.typeErrorPrototype,
+        );
+
+        const descriptor = evaluateScript(
+          callerRealm,
+          'foreignGetOwnPropertyDescriptor(target, "x");',
+        ).value;
+        assertSame(
+          /** @type {EngineObject} */ (descriptor).getPrototypeOf(),
+          methodRealm.intrinsics.objectPrototype,
+        );
+
+        const keys = evaluateScript(
+          callerRealm,
+          'foreignOwnKeys(target);',
+        ).value;
+        assertSame(
+          /** @type {EngineObject} */ (keys).getPrototypeOf(),
+          methodRealm.intrinsics.arrayPrototype,
+        );
+
+        const hostile = new HostileExotic(
+          callerRealm.intrinsics.objectPrototype,
+          undefined,
+        );
+        const sentinel = new EngineObject(
+          callerRealm.intrinsics.objectPrototype,
+        );
+        hostile.abrupt.set('get', new ThrowSignal(sentinel));
+        defineGlobal(callerRealm, 'hostile', hostile);
+        const abrupt = evaluateScript(
+          callerRealm,
+          'var caught; try { foreignGet(hostile, "x"); }' +
+            'catch (value) { caught = value; } caught;',
+        ).value;
+        assertSame(abrupt, sentinel);
+        assertSame(callerAgent.activeExecutionRealm, null);
+        assertSame(methodAgent.activeExecutionRealm, null);
+      }
+    },
+  },
+  {
+    name: 'all Table 5-backed Reflect methods dispatch once in the method Realm',
     run() {
       const realm = createRealm();
       const exotic = new HostileExotic(
         realm.intrinsics.objectPrototype,
         undefined,
       );
-      exotic.defineOwnPropertyResult = false;
-      exotic.deleteResult = false;
+      const nextPrototype = new EngineObject(realm.intrinsics.objectPrototype);
       exotic.setPrototypeResult = true;
-      exotic.virtual.set('x', {
-        value: 3,
-        writable: true,
-        enumerable: false,
-        configurable: true,
-      });
+      exotic.preventExtensionsResult = true;
+      exotic.defineOwnPropertyResult = true;
+      exotic.deleteResult = true;
+      exotic.setResult = true;
       defineGlobal(realm, 'hostile', exotic);
-      defineGlobal(
+      defineGlobal(realm, 'nextPrototype', nextPrototype);
+
+      evaluateScript(
         realm,
-        'nextProto',
-        new EngineObject(null, 'Object', realm.agent),
+        'Reflect.getPrototypeOf(hostile);' +
+          'Reflect.isExtensible(hostile);' +
+          'Reflect.ownKeys(hostile);' +
+          'Reflect.preventExtensions(hostile);' +
+          'Reflect.defineProperty(hostile, "x", {value: 1});' +
+          'Reflect.deleteProperty(hostile, "x");' +
+          'Reflect.getOwnPropertyDescriptor(hostile, "x");' +
+          'Reflect.has(hostile, "x");' +
+          'Reflect.setPrototypeOf(hostile, nextPrototype);' +
+          'Reflect.get(hostile, "x");' +
+          'Reflect.set(hostile, "x", 1);',
       );
 
       assertSame(
-        evaluateScript(
-          realm,
-          'Reflect.defineProperty(hostile, "x", {value: 1});',
-        ).value,
-        false,
-      );
-      assertSame(
-        evaluateScript(realm, 'Reflect.deleteProperty(hostile, "x");').value,
-        false,
-      );
-      assertSame(
-        evaluateScript(realm, 'Reflect.has(hostile, "x");').value,
-        true,
-      );
-      assertSame(
-        evaluateScript(realm, 'Reflect.setPrototypeOf(hostile, nextProto);')
-          .value,
-        true,
-      );
-      assertSame(
         JSON.stringify(exotic.calls.map((call) => call[0])),
-        '["defineOwnProperty","delete","hasProperty","setPrototypeOf"]',
+        '["getPrototypeOf","isExtensible","ownPropertyKeys",' +
+          '"preventExtensions","defineOwnProperty","delete",' +
+          '"getOwnProperty","hasProperty","setPrototypeOf","get","set"]',
       );
-      assertSame(exotic.activeRealms.length, 4);
-      for (const activeRealm of exotic.activeRealms) {
-        assertSame(activeRealm, realm);
+      assertSame(
+        exotic.activeRealms.every((activeRealm) => activeRealm === realm),
+        true,
+      );
+
+      const sentinel = new EngineObject(realm.intrinsics.objectPrototype);
+      for (const [operation, source] of [
+        ['getPrototypeOf', 'Reflect.getPrototypeOf(hostile);'],
+        ['isExtensible', 'Reflect.isExtensible(hostile);'],
+        ['ownPropertyKeys', 'Reflect.ownKeys(hostile);'],
+        ['preventExtensions', 'Reflect.preventExtensions(hostile);'],
+        ['get', 'Reflect.get(hostile, "x");'],
+        ['set', 'Reflect.set(hostile, "x", 1);'],
+      ]) {
+        exotic.abrupt.clear();
+        exotic.abrupt.set(operation, new ThrowSignal(sentinel));
+        const completion = evaluateScript(realm, source);
+        assertSame(completion.type, 'throw');
+        assertSame(completion.value, sentinel);
       }
     },
   },

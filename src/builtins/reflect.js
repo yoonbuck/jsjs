@@ -93,6 +93,16 @@ export function createReflectIntrinsics(realm) {
     },
   );
 
+  defineReflectMethod(realm, reflectObject, 'get', 2, (_this, args) => {
+    const target = requireObjectReceiver(
+      args[0],
+      'Reflect.get requires an object',
+    );
+    const key = toPropertyKey(args[1], realm);
+    const receiver = args.length < 3 ? target : args[2];
+    return target.get(key, receiver);
+  });
+
   defineReflectMethod(
     realm,
     reflectObject,
@@ -158,6 +168,16 @@ export function createReflectIntrinsics(realm) {
         'Reflect.preventExtensions requires an object',
       ).preventExtensions(),
   );
+
+  defineReflectMethod(realm, reflectObject, 'set', 3, (_this, args) => {
+    const target = requireObjectReceiver(
+      args[0],
+      'Reflect.set requires an object',
+    );
+    const key = toPropertyKey(args[1], realm);
+    const receiver = args.length < 4 ? target : args[3];
+    return target.set(key, args[2], receiver);
+  });
 
   defineReflectMethod(
     realm,
