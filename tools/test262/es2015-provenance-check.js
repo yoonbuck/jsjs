@@ -2084,6 +2084,37 @@ function parseRoadmapAuditEvidenceDocument(text, label) {
   return { document, rawRecords, records };
 }
 
+/**
+ * @param {{
+ *   profile: string,
+ *   outputPath: string,
+ *   promotionByPath: ReadonlyMap<string, { features: readonly string[] }>,
+ *   records: readonly ReturnType<typeof createTestRecord>[],
+ * }} options
+ * @returns {ReturnType<typeof createTestRecord>[]}
+ */
+export function reconstructGenericPromotedAuditRecords(options) {
+  return options.records.map((record) => {
+    if (record.status !== 'passed') {
+      throw new Es2015ProvenanceCheckError(
+        `${options.profile} protected output ${options.outputPath} requires passing audit evidence for promoted path ${record.file}`,
+      );
+    }
+    const promotedEntry = options.promotionByPath.get(record.file);
+    if (promotedEntry === undefined) {
+      throw new Es2015ProvenanceCheckError(
+        `${options.profile} protected output ${options.outputPath} promotion metadata is missing ${record.file}`,
+      );
+    }
+    return createTestRecord({
+      file: record.file,
+      variant: record.variant,
+      status: record.status,
+      features: promotedEntry.features,
+    });
+  });
+}
+
 /** @param {readonly string[]} values @param {string} label */
 function assertSortedUniqueStrings(values, label) {
   const sorted = [...values].sort();
@@ -3193,30 +3224,15 @@ async function validateReportProjection(
     const promotionByPath = new Map(
       promotion.entries.map((entry) => [entry.path, entry]),
     );
-    promotionRecords = parseRoadmapAuditEvidence(
-      auditEvidenceText,
-      AUDIT_EVIDENCE_FILE,
-    )
-      .filter((record) => promoted.has(record.file))
-      .map((record) => {
-        if (record.status !== 'passed') {
-          throw new Es2015ProvenanceCheckError(
-            `${profile} protected output ${output.path} requires passing audit evidence for promoted path ${record.file}`,
-          );
-        }
-        const promotedEntry = promotionByPath.get(record.file);
-        if (promotedEntry === undefined) {
-          throw new Es2015ProvenanceCheckError(
-            `${profile} protected output ${output.path} promotion metadata is missing ${record.file}`,
-          );
-        }
-        return createTestRecord({
-          file: record.file,
-          variant: record.variant,
-          status: record.status,
-          features: promotedEntry.features,
-        });
-      });
+    promotionRecords = reconstructGenericPromotedAuditRecords({
+      profile,
+      outputPath: output.path,
+      promotionByPath,
+      records: parseRoadmapAuditEvidence(
+        auditEvidenceText,
+        AUDIT_EVIDENCE_FILE,
+      ).filter((record) => promoted.has(record.file)),
+    });
   }
   const expectedRecords = orderReportRecords(
     selectedPaths,

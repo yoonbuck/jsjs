@@ -27,6 +27,7 @@ import {
   Es2015ProvenanceCheckError,
   main as provenanceCheck,
   parseRoadmapAuthorityMarker,
+  reconstructGenericPromotedAuditRecords,
   validateRoadmapProtectedOutputs,
   validateRoadmapAuthorityConsumption,
   validateRoadmapAuthorityMigration,
@@ -9407,75 +9408,26 @@ export default [
         assertSame(error.message, scenario.message);
       }
 
-      const missingMetadataFixture = syntheticRoadmapProjectionFixture(
-        Object.freeze(['Reflect', 'Symbol.toStringTag']),
-      );
-      const originalArrayMap = Array.prototype.map;
-      let promotionMapCalls = 0;
-      /**
-       * @this {readonly { path: string, variants: number, features: readonly string[], includeFeatures: readonly string[] }[]}
-       * @type {typeof Array.prototype.map}
-       */
-      const patchedArrayMap = function map(callback, thisArg) {
-        if (
-          Object.isFrozen(this) &&
-          Object.isFrozen(this[0]) &&
-          this.length === 1 &&
-          this[0] !== undefined &&
-          this[0].path === 'test/language/promotion.js' &&
-          this[0].variants === 2 &&
-          Array.isArray(this[0].features) &&
-          this[0].features.length === 2 &&
-          Array.isArray(this[0].includeFeatures)
-        ) {
-          promotionMapCalls += 1;
-          // Let the first two traversals establish the promoted set.
-          if (promotionMapCalls < 3) {
-            return Reflect.apply(originalArrayMap, this, [callback, thisArg]);
-          }
-          const promotedEntries = this.slice();
-          promotedEntries[0] = {
-            ...promotedEntries[0],
-            path: 'test/language/promotion-metadata-missing.js',
-          };
-          return Reflect.apply(originalArrayMap, promotedEntries, [
-            callback,
-            thisArg,
-          ]);
-        }
-        return Reflect.apply(originalArrayMap, this, [callback, thisArg]);
-      };
-      Array.prototype.map = patchedArrayMap;
-      try {
-        const error = await rejected(() =>
-          validateRoadmapAuthorityConsumption(
-            missingMetadataFixture.baseManifestValue,
-            missingMetadataFixture.headManifestValue,
-            featureMarker,
-            {
-              deps: rangeCheckDependencies({
-                changes: missingMetadataFixture.changes,
-                baseManifestText: missingMetadataFixture.baseManifestText,
-                headManifestText: missingMetadataFixture.headManifestText,
-                baseFiles: missingMetadataFixture.baseFiles,
-                headFiles: missingMetadataFixture.headFiles,
+      const missingMetadataError = assertThrows(
+        () =>
+          reconstructGenericPromotedAuditRecords({
+            profile: 'roadmap-reclassification:H1',
+            outputPath: 'docs/test262-report.jsonl',
+            promotionByPath: new Map(),
+            records: [
+              createTestRecord({
+                file: 'test/language/promotion.js',
+                variant: 'non-strict',
+                status: 'passed',
               }),
-              base: RANGE_BASE_SHA,
-              head: RANGE_HEAD_SHA,
-              changes: missingMetadataFixture.changes.map((change) => ({
-                ...change,
-                sourcePath: null,
-              })),
-            },
-          ),
-        );
-        assertSame(
-          error.message,
-          'roadmap-reclassification:H1 protected output docs/test262-report.jsonl promotion metadata is missing test/language/promotion.js',
-        );
-      } finally {
-        Array.prototype.map = originalArrayMap;
-      }
+            ],
+          }),
+        Es2015ProvenanceCheckError,
+      );
+      assertSame(
+        missingMetadataError.message,
+        'roadmap-reclassification:H1 protected output docs/test262-report.jsonl promotion metadata is missing test/language/promotion.js',
+      );
 
       for (const scenario of [
         {
