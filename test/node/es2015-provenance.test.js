@@ -127,6 +127,64 @@ const H0_PROJECTED_OUTPUT_SHA256 = Object.freeze({
 });
 const H0_BOOTSTRAP_REPAIR_BASE_MANIFEST_SHA256 =
   'a2b0b43085376ab65069829252b8a8dae2da538e5e3cf4a0a0e937725ca72974';
+const M1_AUTHORITY_REPAIR_BASE = '554afc367657439d116d23f4477bb24787a0e261';
+const M1_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256 =
+  'abc71cd2ac6284b8a67cf1dbe98b507a9a6f71fda478998aa27520869ff97f19';
+const M1_AUTHORITY_REPAIR_BASE_CHECKER_SHA256 =
+  'bb7513d190af22f377d451bdfa1618c6b808ccd40a5e534c34f7ebcdc57ea409';
+const M1_AUTHORITY_REPAIR_BASE_RECORD_SHA256 =
+  '5ee279b8b9c836fbb039caf83a5de0f73b31f427133214e4fd250871bc2345f8';
+const M1_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256 =
+  'c12f0cc983141fccfc132dd7d872a29022192d33d72389eac9960c3403b21fbf';
+const M1_AUTHORITY_REPAIR_HEAD_RECORD_SHA256 =
+  '42f7193e216332d40b3c852ae3a4d96aa5c24c29533c8cf344ced59b5b207670';
+const M1_AUTHORITY_REPAIR_CHANGES = Object.freeze([
+  {
+    status: 'M',
+    path: 'tools/test262/es2015-provenance-check.js',
+  },
+  {
+    status: 'M',
+    path: ES2015_PROVENANCE_FILE,
+  },
+  {
+    status: 'M',
+    path: 'test/node/es2015-provenance.test.js',
+  },
+  {
+    status: 'M',
+    path: 'docs/testing.md',
+  },
+  {
+    status: 'A',
+    path: 'docs/superpowers/specs/2026-08-23-m1-authority-repair-design.md',
+  },
+  {
+    status: 'A',
+    path: 'docs/superpowers/plans/2026-08-23-m1-authority-repair.md',
+  },
+]);
+const M1_AUTHORITY_REPAIR_PROMOTION_SHA256 =
+  '31f807a05d56d35762cd5457f779624df04f11ef482b3d1bcb60be3a06883c69';
+const M1_AUTHORITY_REPAIR_PROJECT_PROJECTIONS = Object.freeze({
+  'docs/conformance.md':
+    '79a033c365600cceb1f337bcc680bfdd76b095be0a6b5fb64db604c784cce65b',
+  'docs/test262-report.jsonl':
+    'b1968f16a04240ce1169430f695f01a4ee013fdbf2ba3dcdd38b4ccabdcc225f',
+  'tools/test262/es2015-taxonomy.json':
+    'a7b4dbd0334bd5ca34a25c80b156a051c444c989d8b87ba6ae18d34a7ca0078c',
+  'tools/test262/upstream-subset.json':
+    'bd59cfd5496a3c180a99240b6611d1efe0141b931c63d13fd897dc0c1b25cdf3',
+});
+const M1_AUTHORITY_REPAIR_SELECTION_OUTPUT = Object.freeze({
+  path: 'tools/test262/es5-selection.json',
+  operation: 'replace-exact',
+  baseSha256:
+    '533e0b9fc165a026d64c4e64d783cf2585de7236600acacf228f06d27f23d8c8',
+  headSha256:
+    '78ac694beb258be0b67c7788137c736b0b30cf7457e3a903d364d38c038b48df',
+  projectionSha256: null,
+});
 const H0_BOOTSTRAP_REPAIR_PRODUCTION_PATHS = Object.freeze([
   'tools/test262/es2015-promotion.js',
   'tools/test262/es2015-provenance-check.js',
@@ -1818,6 +1876,111 @@ protected-projection-sha256:${options.protectedProjectionSha256 ?? '8e16b33ffdbd
  */
 function h0BootstrapRepairMarker(options = {}) {
   return `<!-- es2015-h0-bootstrap-repair base:${options.base ?? H0_BOOTSTRAP_BASE_SHA} base-manifest-sha256:${options.baseManifestSha256 ?? H0_BOOTSTRAP_REPAIR_BASE_MANIFEST_SHA256} -->`;
+}
+
+/**
+ * @param {{
+ *   base?: string,
+ *   baseManifestSha256?: string,
+ *   baseRecordSha256?: string,
+ *   headManifestSha256?: string,
+ *   headRecordSha256?: string,
+ * }} [options]
+ */
+function m1AuthorityRepairMarker(options = {}) {
+  return `<!-- es2015-m1-authority-repair
+parent:70
+code:M1
+issue:80
+base:${options.base ?? M1_AUTHORITY_REPAIR_BASE}
+base-manifest-sha256:${options.baseManifestSha256 ?? M1_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256}
+base-record-sha256:${options.baseRecordSha256 ?? M1_AUTHORITY_REPAIR_BASE_RECORD_SHA256}
+head-manifest-sha256:${options.headManifestSha256 ?? M1_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256}
+head-record-sha256:${options.headRecordSha256 ?? M1_AUTHORITY_REPAIR_HEAD_RECORD_SHA256}
+-->`;
+}
+
+/** @type {string | null} */
+let m1AuthorityRepairBaseManifestTextCache = null;
+
+function m1AuthorityRepairBaseManifestText() {
+  if (m1AuthorityRepairBaseManifestTextCache === null) {
+    m1AuthorityRepairBaseManifestTextCache = readGitFixtureText(
+      M1_AUTHORITY_REPAIR_BASE,
+      ES2015_PROVENANCE_FILE,
+    );
+  }
+  return m1AuthorityRepairBaseManifestTextCache;
+}
+
+/** @param {Record<string, any>} manifest */
+function applyM1AuthorityRepairManifestDelta(manifest) {
+  const m1 = manifest.roadmapAuthorities.find(
+    (/** @type {{ code: string }} */ authority) => authority.code === 'M1',
+  );
+  assertSame(m1?.state, 'pending');
+  const promotionEvidence = m1.evidence.find(
+    (/** @type {{ path: string }} */ entry) =>
+      entry.path === 'tools/test262/es2015-m1-promotion.json',
+  );
+  const promotionOutput = m1.protectedOutputs.find(
+    (/** @type {{ path: string }} */ entry) =>
+      entry.path === 'tools/test262/es2015-m1-promotion.json',
+  );
+  assertSame(promotionEvidence !== undefined, true);
+  assertSame(promotionOutput !== undefined, true);
+  promotionEvidence.sha256 = M1_AUTHORITY_REPAIR_PROMOTION_SHA256;
+  promotionOutput.headSha256 = M1_AUTHORITY_REPAIR_PROMOTION_SHA256;
+  for (const [path, projectionSha256] of Object.entries(
+    M1_AUTHORITY_REPAIR_PROJECT_PROJECTIONS,
+  )) {
+    const output = m1.protectedOutputs.find(
+      (/** @type {{ path: string }} */ entry) => entry.path === path,
+    );
+    assertSame(output !== undefined, true, path);
+    output.projectionSha256 = projectionSha256;
+  }
+  m1.protectedOutputs.push(
+    structuredClone(M1_AUTHORITY_REPAIR_SELECTION_OUTPUT),
+  );
+  m1.protectedOutputs.sort(
+    (
+      /** @type {{ path: string }} */ left,
+      /** @type {{ path: string }} */ right,
+    ) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0),
+  );
+  return manifest;
+}
+
+function m1AuthorityRepairHeadManifestValue() {
+  return applyM1AuthorityRepairManifestDelta(
+    JSON.parse(m1AuthorityRepairBaseManifestText()),
+  );
+}
+
+function m1AuthorityRepairHeadManifestText() {
+  return prettyJson(m1AuthorityRepairHeadManifestValue());
+}
+
+/** @param {Record<string, any>} baseManifest */
+function m1AuthorityRepairImmutablePaths(baseManifest) {
+  return new Set([
+    '.github/workflows/ci.yml',
+    'tools/ci/pipeline.js',
+    'tools/test262/es2015-policy.json',
+    'tools/test262/features.json',
+    ...ES2015_PROVENANCE_DECISION_CODES.map(
+      (code) => `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+    ),
+    ...baseManifest.roadmapAuthorities.flatMap(
+      (
+        /** @type {{ evidence: readonly { path: string }[], protectedOutputs: readonly { path: string }[] }} */ authority,
+      ) => [
+        ...authority.evidence.map((entry) => entry.path),
+        ...authority.protectedOutputs.map((entry) => entry.path),
+      ],
+    ),
+  ]);
 }
 
 /** @param {readonly { path: string, operation: string, headSha256: string | null, projectionSha256: string | null }[]} outputs */
@@ -3761,6 +3924,136 @@ function h0BootstrapRepairCiArgs(base = H0_BOOTSTRAP_BASE_SHA) {
     `--head=${RANGE_HEAD_SHA}`,
     '--pr-body-env=PROVENANCE_PR_BODY',
   ];
+}
+
+/** @type {ReadonlyMap<string, string> | null} */
+let m1AuthorityRepairBaseFilesCache = null;
+
+function m1AuthorityRepairBaseFiles() {
+  if (m1AuthorityRepairBaseFilesCache !== null) {
+    return m1AuthorityRepairBaseFilesCache;
+  }
+  const baseManifest = JSON.parse(m1AuthorityRepairBaseManifestText());
+  const paths = new Set([
+    ...m1AuthorityRepairImmutablePaths(baseManifest),
+    ES2015_PROVENANCE_FILE,
+    'tools/test262/es2015-provenance-check.js',
+    'test/node/es2015-provenance.test.js',
+    'docs/testing.md',
+  ]);
+  const files = new Map();
+  for (const path of paths) {
+    const bytes = readOptionalGitFixtureBuffer(M1_AUTHORITY_REPAIR_BASE, path);
+    if (bytes !== null) files.set(path, bytes.toString('utf8'));
+  }
+  m1AuthorityRepairBaseFilesCache = files;
+  return files;
+}
+
+/**
+ * @param {{
+ *   baseFiles?: ReadonlyMap<string, string>,
+ *   baseManifestText?: string,
+ *   baseModes?: ReadonlyMap<string, string>,
+ *   baseSha?: string,
+ *   body?: string,
+ *   changes?: readonly { status: string, path: string, sourcePath?: string }[],
+ *   eventName?: string | null,
+ *   headFiles?: ReadonlyMap<string, string>,
+ *   headManifestText?: string,
+ *   headModes?: ReadonlyMap<string, string>,
+ *   headSha?: string,
+ *   mergeBase?: string,
+ * }} [options]
+ */
+function m1AuthorityRepairRangeDependencies(options = {}) {
+  const baseManifestText =
+    options.baseManifestText ?? m1AuthorityRepairBaseManifestText();
+  const headManifestText =
+    options.headManifestText ?? m1AuthorityRepairHeadManifestText();
+  const baseFiles = new Map(m1AuthorityRepairBaseFiles());
+  baseFiles.set(ES2015_PROVENANCE_FILE, baseManifestText);
+  for (const [path, text] of options.baseFiles ?? []) {
+    baseFiles.set(path, text);
+  }
+  const headFiles = new Map(baseFiles);
+  headFiles.set(
+    'tools/test262/es2015-provenance-check.js',
+    'M1 authority repair HEAD checker fixture\n',
+  );
+  headFiles.set(ES2015_PROVENANCE_FILE, headManifestText);
+  headFiles.set(
+    'test/node/es2015-provenance.test.js',
+    'M1 authority repair HEAD focused test fixture\n',
+  );
+  headFiles.set('docs/testing.md', 'M1 authority repair HEAD docs fixture\n');
+  headFiles.set(
+    'docs/superpowers/specs/2026-08-23-m1-authority-repair-design.md',
+    '# M1 authority repair design fixture\n',
+  );
+  headFiles.set(
+    'docs/superpowers/plans/2026-08-23-m1-authority-repair.md',
+    '# M1 authority repair plan fixture\n',
+  );
+  for (const [path, text] of options.headFiles ?? []) {
+    headFiles.set(path, text);
+  }
+  const dependencies = rangeCheckDependencies({
+    changes: options.changes ?? M1_AUTHORITY_REPAIR_CHANGES,
+    baseSha: options.baseSha ?? M1_AUTHORITY_REPAIR_BASE,
+    headSha: options.headSha ?? RANGE_HEAD_SHA,
+    baseManifestText,
+    headManifestText,
+    baseFiles,
+    headFiles,
+    baseModes: options.baseModes,
+    headModes: options.headModes,
+    mergeBase: options.mergeBase,
+  });
+  dependencies.environment = {
+    TZ: 'UTC',
+    ...(options.eventName === null
+      ? {}
+      : { GITHUB_EVENT_NAME: options.eventName ?? 'pull_request' }),
+    PROVENANCE_PR_BODY: options.body ?? m1AuthorityRepairMarker(),
+  };
+  return dependencies;
+}
+
+/** @param {string} [base] @param {string} [head] */
+function m1AuthorityRepairCiArgs(
+  base = M1_AUTHORITY_REPAIR_BASE,
+  head = RANGE_HEAD_SHA,
+) {
+  return [
+    '--check-range',
+    `--base=${base}`,
+    `--head=${head}`,
+    '--pr-body-env=PROVENANCE_PR_BODY',
+  ];
+}
+
+function m1AuthorityRepairContextChanges() {
+  return M1_AUTHORITY_REPAIR_CHANGES.map((change) => ({
+    ...change,
+    sourcePath: null,
+  }));
+}
+
+/**
+ * @param {(manifest: Record<string, any>, m1: Record<string, any>) => void} mutate
+ * @param {{ canonical?: boolean }} [options]
+ */
+function mutatedM1AuthorityRepairHeadManifestText(mutate, options = {}) {
+  const manifest = m1AuthorityRepairHeadManifestValue();
+  const m1 = manifest.roadmapAuthorities.find(
+    (/** @type {{ code: string }} */ authority) => authority.code === 'M1',
+  );
+  assertSame(m1 !== undefined, true);
+  mutate(manifest, m1);
+  return options.canonical === false
+    ? JSON.stringify(manifest)
+    : prettyJson(manifest);
 }
 
 export default [
@@ -9956,6 +10249,780 @@ export default [
           )
         ).message,
         'Provenance PR marker is not authoritative',
+      );
+    },
+  },
+  {
+    name: 'ES2015 M1 authority repair accepts the exact ordinary-PR marker and literal corrected identities',
+    run: async () => {
+      assertSame(
+        await provenanceCheck(
+          m1AuthorityRepairCiArgs(),
+          m1AuthorityRepairRangeDependencies(),
+        ),
+        0,
+      );
+
+      const checker =
+        await import('../../tools/test262/es2015-provenance-check.js');
+      assertSame(typeof checker.parseM1AuthorityRepairMarker, 'function');
+      const markerText = m1AuthorityRepairMarker();
+      assertSame(
+        json(checker.parseM1AuthorityRepairMarker(markerText)),
+        json({
+          kind: 'm1-authority-repair',
+          text: markerText,
+          code: 'M1',
+          issue: 80,
+          base: M1_AUTHORITY_REPAIR_BASE,
+          baseManifestSha256: M1_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256,
+          baseRecordSha256: M1_AUTHORITY_REPAIR_BASE_RECORD_SHA256,
+          headManifestSha256: M1_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256,
+          headRecordSha256: M1_AUTHORITY_REPAIR_HEAD_RECORD_SHA256,
+        }),
+      );
+
+      const baseManifest = JSON.parse(m1AuthorityRepairBaseManifestText());
+      const baseM1 = baseManifest.roadmapAuthorities.find(
+        (/** @type {{ code: string }} */ authority) => authority.code === 'M1',
+      );
+      const headManifestText = m1AuthorityRepairHeadManifestText();
+      const headManifest = JSON.parse(headManifestText);
+      const headM1 = headManifest.roadmapAuthorities.find(
+        (/** @type {{ code: string }} */ authority) => authority.code === 'M1',
+      );
+      assertSame(
+        sha256(m1AuthorityRepairBaseManifestText()),
+        M1_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256,
+      );
+      assertSame(
+        canonicalRoadmapAuthoritySha256(baseM1),
+        M1_AUTHORITY_REPAIR_BASE_RECORD_SHA256,
+      );
+      assertSame(
+        sha256(headManifestText),
+        M1_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256,
+      );
+      assertSame(
+        canonicalRoadmapAuthoritySha256(headM1),
+        M1_AUTHORITY_REPAIR_HEAD_RECORD_SHA256,
+      );
+      assertSame(headM1.state, 'pending');
+      assertSame(headM1.evidence.length, 6);
+      assertSame(headM1.protectedOutputs.length, 12);
+    },
+  },
+  {
+    name: 'ES2015 M1 authority repair marker rejects duplicate, mixed, malformed, target, and local activation',
+    run: async () => {
+      const checker =
+        await import('../../tools/test262/es2015-provenance-check.js');
+      assertSame(typeof checker.parseM1AuthorityRepairMarker, 'function');
+      const marker = m1AuthorityRepairMarker();
+      for (const body of [
+        `${marker}\n${marker}`,
+        `${marker}\n${roadmapPreparationMarker()}`,
+      ]) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                m1AuthorityRepairCiArgs(),
+                m1AuthorityRepairRangeDependencies({ body }),
+              ),
+            )
+          ).message,
+          'PR body must contain exactly one authoritative provenance marker',
+        );
+      }
+
+      const malformedMarkers = [
+        marker.replace(
+          M1_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256,
+          M1_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256.toUpperCase(),
+        ),
+        marker.replace(/\n/gu, '\r\n'),
+        marker.replace('code:M1\nissue:80', 'issue:80\ncode:M1'),
+        marker.replace('code:M1\n', ''),
+        marker.replace('code:M1\n', 'code:M1\ncode:M1\n'),
+        marker.replace('code:M1\n', 'code:M1\nextra:no\n'),
+        marker.replace('code:M1', 'code: M1'),
+        `prefix ${marker}`,
+        `${marker} suffix`,
+      ];
+      for (const malformed of malformedMarkers) {
+        const parseError = assertThrows(
+          () => checker.parseM1AuthorityRepairMarker(malformed),
+          Es2015ProvenanceCheckError,
+        );
+        assertSame(
+          parseError.message,
+          'M1 authority repair marker is not authoritative',
+          malformed,
+        );
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                m1AuthorityRepairCiArgs(),
+                m1AuthorityRepairRangeDependencies({ body: malformed }),
+              ),
+            )
+          ).message,
+          'A provenance-owned PR range requires one authoritative provenance marker',
+          malformed,
+        );
+      }
+
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              m1AuthorityRepairCiArgs(),
+              m1AuthorityRepairRangeDependencies({
+                eventName: 'pull_request_target',
+              }),
+            ),
+          )
+        ).message,
+        'A provenance-owned PR range requires one authoritative provenance marker',
+      );
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              [
+                '--check-range',
+                `--base=${M1_AUTHORITY_REPAIR_BASE}`,
+                `--head=${RANGE_HEAD_SHA}`,
+                '--profile=m1-authority-repair',
+                `--marker=${marker}`,
+              ],
+              m1AuthorityRepairRangeDependencies(),
+            ),
+          )
+        ).message,
+        'Provenance PR marker is not authoritative',
+      );
+    },
+  },
+  {
+    name: 'ES2015 M1 authority repair validator independently requires an ordinary pull_request event',
+    run: async () => {
+      const checker =
+        await import('../../tools/test262/es2015-provenance-check.js');
+      assertSame(typeof checker.parseM1AuthorityRepairMarker, 'function');
+      assertSame(typeof checker.validateM1AuthorityRepairRange, 'function');
+      const marker = checker.parseM1AuthorityRepairMarker(
+        m1AuthorityRepairMarker(),
+      );
+      for (const eventName of ['pull_request_target', 'push', null]) {
+        const deps = m1AuthorityRepairRangeDependencies({ eventName });
+        assertSame(
+          (
+            await rejected(() =>
+              checker.validateM1AuthorityRepairRange(marker, {
+                deps,
+                base: M1_AUTHORITY_REPAIR_BASE,
+                head: RANGE_HEAD_SHA,
+                changes: m1AuthorityRepairContextChanges(),
+                baseManifestText: m1AuthorityRepairBaseManifestText(),
+              }),
+            )
+          ).message,
+          'M1 authority repair requires an ordinary pull_request event',
+          String(eventName),
+        );
+      }
+    },
+  },
+  {
+    name: 'ES2015 M1 authority repair pins exact BASE commit, merge base, manifest, checker, and record',
+    run: async () => {
+      for (const scenario of [
+        {
+          dependencies: m1AuthorityRepairRangeDependencies({
+            baseSha: RANGE_BASE_SHA,
+          }),
+          args: m1AuthorityRepairCiArgs(RANGE_BASE_SHA),
+          message: `M1 authority repair range requires base ${M1_AUTHORITY_REPAIR_BASE}`,
+        },
+        {
+          dependencies: m1AuthorityRepairRangeDependencies({
+            body: m1AuthorityRepairMarker({ base: RANGE_BASE_SHA }),
+          }),
+          args: m1AuthorityRepairCiArgs(),
+          message: `M1 authority repair marker base must be ${M1_AUTHORITY_REPAIR_BASE}`,
+        },
+        {
+          dependencies: m1AuthorityRepairRangeDependencies({
+            body: m1AuthorityRepairMarker({
+              baseManifestSha256: 'a'.repeat(64),
+            }),
+          }),
+          args: m1AuthorityRepairCiArgs(),
+          message: `M1 authority repair marker base-manifest-sha256 must be ${M1_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256}`,
+        },
+        {
+          dependencies: m1AuthorityRepairRangeDependencies({
+            body: m1AuthorityRepairMarker({
+              baseRecordSha256: 'a'.repeat(64),
+            }),
+          }),
+          args: m1AuthorityRepairCiArgs(),
+          message: `M1 authority repair marker base-record-sha256 must be ${M1_AUTHORITY_REPAIR_BASE_RECORD_SHA256}`,
+        },
+        {
+          dependencies: m1AuthorityRepairRangeDependencies({
+            baseFiles: new Map([
+              [
+                'tools/test262/es2015-provenance-check.js',
+                'drifted BASE checker\n',
+              ],
+            ]),
+          }),
+          args: m1AuthorityRepairCiArgs(),
+          message: `M1 authority repair BASE checker sha256 must be ${M1_AUTHORITY_REPAIR_BASE_CHECKER_SHA256}`,
+        },
+      ]) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(scenario.args, scenario.dependencies),
+            )
+          ).message,
+          scenario.message,
+        );
+      }
+
+      const checker =
+        await import('../../tools/test262/es2015-provenance-check.js');
+      const deps = m1AuthorityRepairRangeDependencies({
+        mergeBase: RANGE_BASE_SHA,
+      });
+      assertSame(
+        (
+          await rejected(() =>
+            checker.validateM1AuthorityRepairRange(
+              checker.parseM1AuthorityRepairMarker(m1AuthorityRepairMarker()),
+              {
+                deps,
+                base: M1_AUTHORITY_REPAIR_BASE,
+                head: RANGE_HEAD_SHA,
+                changes: m1AuthorityRepairContextChanges(),
+                baseManifestText: m1AuthorityRepairBaseManifestText(),
+              },
+            ),
+          )
+        ).message,
+        `M1 authority repair merge base must be ${M1_AUTHORITY_REPAIR_BASE}`,
+      );
+    },
+  },
+  {
+    name: 'ES2015 M1 authority repair range requires the exact six canonical regular-file changes',
+    run: async () => {
+      for (const required of M1_AUTHORITY_REPAIR_CHANGES) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                m1AuthorityRepairCiArgs(),
+                m1AuthorityRepairRangeDependencies({
+                  changes: M1_AUTHORITY_REPAIR_CHANGES.filter(
+                    (change) => change.path !== required.path,
+                  ),
+                }),
+              ),
+            )
+          ).message,
+          `M1 authority repair range requires ${required.status} ${required.path}`,
+          required.path,
+        );
+      }
+
+      const foreignPath =
+        'docs/superpowers/specs/2026-08-22-m1-authority-repair-design.md';
+      const replacements = [
+        {
+          name: 'foreign path',
+          removedPath: 'docs/testing.md',
+          change: { status: 'M', path: foreignPath },
+          message: `M1 authority repair range includes unexpected path ${foreignPath}`,
+        },
+        {
+          name: 'duplicate path',
+          change: M1_AUTHORITY_REPAIR_CHANGES[0],
+          message:
+            'M1 authority repair range repeats changed path tools/test262/es2015-provenance-check.js',
+        },
+        {
+          name: 'rename',
+          removedPath: 'docs/testing.md',
+          change: {
+            status: 'R100',
+            sourcePath: 'docs/testing.md',
+            path: 'docs/testing-copy.md',
+          },
+          message:
+            'M1 authority repair range forbids rename docs/testing.md -> docs/testing-copy.md',
+        },
+        {
+          name: 'copy',
+          removedPath: 'docs/testing.md',
+          change: {
+            status: 'C100',
+            sourcePath: 'docs/testing.md',
+            path: 'docs/testing-copy.md',
+          },
+          message:
+            'M1 authority repair range forbids copy docs/testing.md -> docs/testing-copy.md',
+        },
+        {
+          name: 'delete',
+          removedPath: 'docs/testing.md',
+          change: { status: 'D', path: 'docs/testing.md' },
+          message:
+            'M1 authority repair range forbids deleted path docs/testing.md',
+        },
+        {
+          name: 'wrong modified status',
+          removedPath: 'tools/test262/es2015-provenance-check.js',
+          change: {
+            status: 'A',
+            path: 'tools/test262/es2015-provenance-check.js',
+          },
+          message:
+            'M1 authority repair range requires M tools/test262/es2015-provenance-check.js',
+        },
+        {
+          name: 'wrong added status',
+          removedPath:
+            'docs/superpowers/specs/2026-08-23-m1-authority-repair-design.md',
+          change: {
+            status: 'M',
+            path: 'docs/superpowers/specs/2026-08-23-m1-authority-repair-design.md',
+          },
+          message:
+            'M1 authority repair range requires A docs/superpowers/specs/2026-08-23-m1-authority-repair-design.md',
+        },
+        {
+          name: 'encoded alias',
+          removedPath: 'tools/test262/es2015-provenance-check.js',
+          change: {
+            status: 'M',
+            path: 'tools/test262/%65s2015-provenance-check.js',
+          },
+          message:
+            'M1 authority repair range path must be canonical: tools/test262/%65s2015-provenance-check.js',
+        },
+        {
+          name: 'path traversal',
+          removedPath: 'tools/test262/es2015-provenance-check.js',
+          change: {
+            status: 'M',
+            path: 'tools/test262/../test262/es2015-provenance-check.js',
+          },
+          message:
+            'M1 authority repair range path must be canonical: tools/test262/../test262/es2015-provenance-check.js',
+        },
+      ];
+      for (const scenario of replacements) {
+        const changes =
+          scenario.removedPath === undefined
+            ? [...M1_AUTHORITY_REPAIR_CHANGES]
+            : M1_AUTHORITY_REPAIR_CHANGES.filter(
+                (change) => change.path !== scenario.removedPath,
+              );
+        changes.push(scenario.change);
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                m1AuthorityRepairCiArgs(),
+                m1AuthorityRepairRangeDependencies({ changes }),
+              ),
+            )
+          ).message,
+          scenario.message,
+          scenario.name,
+        );
+      }
+
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              m1AuthorityRepairCiArgs(),
+              m1AuthorityRepairRangeDependencies({
+                headModes: new Map([['docs/testing.md', '120000']]),
+              }),
+            ),
+          )
+        ).message,
+        'M1 authority repair range path docs/testing.md must be a regular file in HEAD',
+      );
+    },
+  },
+  {
+    name: 'ES2015 M1 authority repair pins marker and computed HEAD identities to immutable literals',
+    run: async () => {
+      for (const scenario of [
+        {
+          body: m1AuthorityRepairMarker({
+            headManifestSha256: 'a'.repeat(64),
+          }),
+          message: `M1 authority repair marker head-manifest-sha256 must be ${M1_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256}`,
+        },
+        {
+          body: m1AuthorityRepairMarker({
+            headRecordSha256: 'a'.repeat(64),
+          }),
+          message: `M1 authority repair marker head-record-sha256 must be ${M1_AUTHORITY_REPAIR_HEAD_RECORD_SHA256}`,
+        },
+      ]) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                m1AuthorityRepairCiArgs(),
+                m1AuthorityRepairRangeDependencies({ body: scenario.body }),
+              ),
+            )
+          ).message,
+          scenario.message,
+        );
+      }
+
+      const alternateManifestText = mutatedM1AuthorityRepairHeadManifestText(
+        (_manifest, m1) => {
+          m1.protectedOutputs.find(
+            (/** @type {{ path: string }} */ output) =>
+              output.path === 'docs/conformance.md',
+          ).projectionSha256 = 'a'.repeat(64);
+        },
+      );
+      const alternateManifest = JSON.parse(alternateManifestText);
+      const alternateM1 = alternateManifest.roadmapAuthorities.find(
+        (/** @type {{ code: string }} */ authority) => authority.code === 'M1',
+      );
+      const alternateManifestSha256 = sha256(alternateManifestText);
+      const alternateRecordSha256 =
+        canonicalRoadmapAuthoritySha256(alternateM1);
+      const error = await rejected(() =>
+        provenanceCheck(
+          m1AuthorityRepairCiArgs(),
+          m1AuthorityRepairRangeDependencies({
+            body: m1AuthorityRepairMarker({
+              headManifestSha256: alternateManifestSha256,
+              headRecordSha256: alternateRecordSha256,
+            }),
+            headManifestText: alternateManifestText,
+          }),
+        ),
+      );
+      assertSame(
+        error.message,
+        `M1 authority repair marker head-manifest-sha256 must be ${M1_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256}`,
+      );
+      assertSame(
+        error.message.includes(M1_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256),
+        true,
+      );
+      assertSame(error.message.includes('does not match HEAD'), false);
+    },
+  },
+  {
+    name: 'ES2015 M1 authority repair rejects every pending-record structural drift',
+    run: async () => {
+      const scenarios = [
+        {
+          name: 'M1 applied',
+          mutate: (
+            /** @type {Record<string, any>} */ _manifest,
+            /** @type {Record<string, any>} */ m1,
+          ) => {
+            m1.state = 'applied';
+          },
+          messagePart: 'must keep M1 pending',
+        },
+        {
+          name: 'M1 removed',
+          mutate: (/** @type {Record<string, any>} */ manifest) => {
+            manifest.roadmapAuthorities = manifest.roadmapAuthorities.filter(
+              (/** @type {{ code: string }} */ authority) =>
+                authority.code !== 'M1',
+            );
+          },
+          messagePart: 'must preserve roadmap authority count and order',
+        },
+        {
+          name: 'M1 reordered',
+          mutate: (/** @type {Record<string, any>} */ manifest) => {
+            const index = manifest.roadmapAuthorities.findIndex(
+              (/** @type {{ code: string }} */ authority) =>
+                authority.code === 'M1',
+            );
+            [
+              manifest.roadmapAuthorities[index - 1],
+              manifest.roadmapAuthorities[index],
+            ] = [
+              manifest.roadmapAuthorities[index],
+              manifest.roadmapAuthorities[index - 1],
+            ];
+          },
+          messagePart:
+            'roadmapAuthorities must be code-unit sorted unique by code',
+        },
+        {
+          name: 'another authority changed',
+          mutate: (/** @type {Record<string, any>} */ manifest) => {
+            const authority = manifest.roadmapAuthorities.find(
+              (/** @type {{ code: string }} */ candidate) =>
+                candidate.code !== 'M1',
+            );
+            authority.source.rootCount += 1;
+          },
+          messagePart: 'roadmap authority must remain canonical',
+        },
+        {
+          name: 'source drift',
+          mutate: (
+            /** @type {Record<string, any>} */ _manifest,
+            /** @type {Record<string, any>} */ m1,
+          ) => {
+            m1.source.rootCount += 1;
+          },
+          messagePart: 'must preserve M1 source',
+        },
+        {
+          name: 'reconciliation drift',
+          mutate: (
+            /** @type {Record<string, any>} */ manifest,
+            /** @type {Record<string, any>} */ m1,
+          ) => {
+            m1.reconciliation = structuredClone(
+              manifest.roadmapAuthorities.find(
+                (/** @type {{ reconciliation: unknown }} */ authority) =>
+                  authority.reconciliation !== null,
+              ).reconciliation,
+            );
+          },
+          messagePart: 'must preserve M1 reconciliation',
+        },
+        {
+          name: 'destination drift',
+          mutate: (
+            /** @type {Record<string, any>} */ _manifest,
+            /** @type {Record<string, any>} */ m1,
+          ) => {
+            m1.destinations[0].issue += 1;
+          },
+          messagePart: 'must map to the exact approved issue',
+        },
+        {
+          name: 'non-promotion evidence drift',
+          mutate: (
+            /** @type {Record<string, any>} */ _manifest,
+            /** @type {Record<string, any>} */ m1,
+          ) => {
+            m1.evidence[0].sha256 = 'a'.repeat(64);
+          },
+          messagePart: 'must preserve M1 evidence',
+        },
+        {
+          name: 'wrong promotion evidence',
+          mutate: (
+            /** @type {Record<string, any>} */ _manifest,
+            /** @type {Record<string, any>} */ m1,
+          ) => {
+            m1.evidence.find(
+              (/** @type {{ path: string }} */ entry) =>
+                entry.path === 'tools/test262/es2015-m1-promotion.json',
+            ).sha256 = 'a'.repeat(64);
+          },
+          messagePart: 'requires the exact corrected M1 promotion evidence',
+        },
+        {
+          name: 'wrong promotion head hash',
+          mutate: (
+            /** @type {Record<string, any>} */ _manifest,
+            /** @type {Record<string, any>} */ m1,
+          ) => {
+            m1.protectedOutputs.find(
+              (/** @type {{ path: string }} */ output) =>
+                output.path === 'tools/test262/es2015-m1-promotion.json',
+            ).headSha256 = 'a'.repeat(64);
+          },
+          messagePart: 'requires the exact corrected M1 promotion output',
+        },
+        {
+          name: 'wrong project commitment',
+          mutate: (
+            /** @type {Record<string, any>} */ _manifest,
+            /** @type {Record<string, any>} */ m1,
+          ) => {
+            m1.protectedOutputs.find(
+              (/** @type {{ path: string }} */ output) =>
+                output.path === 'docs/conformance.md',
+            ).projectionSha256 = 'a'.repeat(64);
+          },
+          messagePart:
+            'requires the exact corrected M1 project output docs/conformance.md',
+        },
+        {
+          name: 'changed project base hash',
+          mutate: (
+            /** @type {Record<string, any>} */ _manifest,
+            /** @type {Record<string, any>} */ m1,
+          ) => {
+            m1.protectedOutputs.find(
+              (/** @type {{ path: string }} */ output) =>
+                output.path === 'docs/conformance.md',
+            ).baseSha256 = 'a'.repeat(64);
+          },
+          messagePart:
+            'requires the exact corrected M1 project output docs/conformance.md',
+        },
+        {
+          name: 'wrong audit exact hash',
+          mutate: (
+            /** @type {Record<string, any>} */ _manifest,
+            /** @type {Record<string, any>} */ m1,
+          ) => {
+            m1.protectedOutputs.find(
+              (/** @type {{ path: string }} */ output) =>
+                output.path === 'tools/test262/es2015-audit-evidence.json',
+            ).headSha256 = 'a'.repeat(64);
+          },
+          messagePart:
+            'must preserve M1 protected output tools/test262/es2015-audit-evidence.json',
+        },
+        {
+          name: 'missing selection output',
+          mutate: (
+            /** @type {Record<string, any>} */ _manifest,
+            /** @type {Record<string, any>} */ m1,
+          ) => {
+            m1.protectedOutputs = m1.protectedOutputs.filter(
+              (/** @type {{ path: string }} */ output) =>
+                output.path !== 'tools/test262/es5-selection.json',
+            );
+          },
+          messagePart: 'requires the exact M1 selection replacement output',
+        },
+        {
+          name: 'extra selection output',
+          mutate: (
+            /** @type {Record<string, any>} */ _manifest,
+            /** @type {Record<string, any>} */ m1,
+          ) => {
+            m1.protectedOutputs.push({
+              ...structuredClone(M1_AUTHORITY_REPAIR_SELECTION_OUTPUT),
+              path: 'tools/test262/es5-selection-copy.json',
+            });
+            m1.protectedOutputs.sort(
+              (
+                /** @type {{ path: string }} */ left,
+                /** @type {{ path: string }} */ right,
+              ) =>
+                left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+            );
+          },
+          messagePart: 'requires exactly 12 M1 protected outputs',
+        },
+        {
+          name: 'mutated selection output',
+          mutate: (
+            /** @type {Record<string, any>} */ _manifest,
+            /** @type {Record<string, any>} */ m1,
+          ) => {
+            m1.protectedOutputs.find(
+              (/** @type {{ path: string }} */ output) =>
+                output.path === 'tools/test262/es5-selection.json',
+            ).headSha256 = 'a'.repeat(64);
+          },
+          messagePart: 'requires the exact M1 selection replacement output',
+        },
+      ];
+      for (const scenario of scenarios) {
+        const error = await rejected(() =>
+          provenanceCheck(
+            m1AuthorityRepairCiArgs(),
+            m1AuthorityRepairRangeDependencies({
+              headManifestText: mutatedM1AuthorityRepairHeadManifestText(
+                scenario.mutate,
+              ),
+            }),
+          ),
+        );
+        assertSame(
+          error.message.includes(scenario.messagePart),
+          true,
+          `${scenario.name}: ${error.message}`,
+        );
+      }
+
+      const noncanonical = mutatedM1AuthorityRepairHeadManifestText(() => {}, {
+        canonical: false,
+      });
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              m1AuthorityRepairCiArgs(),
+              m1AuthorityRepairRangeDependencies({
+                headManifestText: noncanonical,
+              }),
+            ),
+          )
+        ).message,
+        'M1 authority repair head provenance manifest is not canonical',
+      );
+    },
+  },
+  {
+    name: 'ES2015 M1 authority repair enforces every derived immutable byte and mode',
+    run: async () => {
+      const baseManifest = JSON.parse(m1AuthorityRepairBaseManifestText());
+      const immutablePaths = m1AuthorityRepairImmutablePaths(baseManifest);
+      const baseFiles = m1AuthorityRepairBaseFiles();
+      for (const path of immutablePaths) {
+        const headFiles = new Map([
+          [
+            path,
+            baseFiles.has(path)
+              ? `${baseFiles.get(path)}\nM1 repair drift\n`
+              : `forbidden future M1 repair file ${path}\n`,
+          ],
+        ]);
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                m1AuthorityRepairCiArgs(),
+                m1AuthorityRepairRangeDependencies({ headFiles }),
+              ),
+            )
+          ).message,
+          `M1 authority repair immutable path ${path} must remain byte-identical between BASE and HEAD`,
+          path,
+        );
+      }
+
+      const modePath = '.github/workflows/ci.yml';
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              m1AuthorityRepairCiArgs(),
+              m1AuthorityRepairRangeDependencies({
+                headModes: new Map([[modePath, '100755']]),
+              }),
+            ),
+          )
+        ).message,
+        `M1 authority repair immutable path ${modePath} must retain its exact regular-file mode between BASE and HEAD`,
       );
     },
   },

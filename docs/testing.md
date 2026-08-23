@@ -430,6 +430,80 @@ BASE-byte-identical. The detached old BASE checker does not recognize this
 marker and must continue to report that the provenance-owned range lacks an
 authoritative marker.
 
+### One-use M1 authority repair (#80)
+
+The pending M1 authority is repaired through one exact HEAD-checker range
+rooted at `554afc367657439d116d23f4477bb24787a0e261`. M1 stays `pending`: this
+range changes no authority evidence file, protected-output byte, runtime file,
+workflow, pipeline, policy, feature manifest, or decision fragment.
+
+An ordinary unprivileged `pull_request` body may contain this exact LF-only
+marker:
+
+```text
+<!-- es2015-m1-authority-repair
+parent:70
+code:M1
+issue:80
+base:554afc367657439d116d23f4477bb24787a0e261
+base-manifest-sha256:abc71cd2ac6284b8a67cf1dbe98b507a9a6f71fda478998aa27520869ff97f19
+base-record-sha256:5ee279b8b9c836fbb039caf83a5de0f73b31f427133214e4fd250871bc2345f8
+head-manifest-sha256:c12f0cc983141fccfc132dd7d872a29022192d33d72389eac9960c3403b21fbf
+head-record-sha256:42f7193e216332d40b3c852ae3a4d96aa5c24c29533c8cf344ced59b5b207670
+-->
+```
+
+The checked-out HEAD checker recognizes that block only while
+`GITHUB_EVENT_NAME` is exactly `pull_request`. It is not scanned on
+`pull_request_target`, and `--profile=m1-authority-repair --marker=...` is not
+a local activation mechanism. The validator independently repeats the event
+check and pins the event/merge BASE, BASE manifest, BASE checker, BASE M1
+record, corrected HEAD manifest, and corrected HEAD M1 record. The corrected
+HEAD identities are literal checker constants, not values learned from the
+marker or observed HEAD:
+
+```text
+manifest c12f0cc983141fccfc132dd7d872a29022192d33d72389eac9960c3403b21fbf
+M1 record 42f7193e216332d40b3c852ae3a4d96aa5c24c29533c8cf344ced59b5b207670
+```
+
+The complete BASE-to-HEAD range is exactly:
+
+```text
+M tools/test262/es2015-provenance-check.js
+M tools/test262/es2015-provenance.json
+M test/node/es2015-provenance.test.js
+M docs/testing.md
+A docs/superpowers/specs/2026-08-23-m1-authority-repair-design.md
+A docs/superpowers/plans/2026-08-23-m1-authority-repair.md
+```
+
+The `2026-08-22` repair document names are foreign paths. Missing, extra,
+duplicate, renamed, copied, deleted, aliased, traversed, non-regular, or
+wrong-status paths fail. Defense in depth also requires exact BASE/HEAD bytes
+and modes for the workflow, pipeline, ES2015 policy, feature manifest, every
+decision fragment, and every evidence/protected-output path named by a BASE
+authority. A future M1 evidence path absent in BASE must remain absent in HEAD.
+
+The unchanged exact BASE checker is expected to reject this repair with:
+
+```text
+A provenance-owned PR range requires one authoritative provenance marker
+```
+
+Only that old-trust-root failure may receive an explicit administrator-reviewed
+merge exception. No other CI, CodeQL, warning, extraction, or test failure is
+waivable.
+
+Local repair validation is limited to the focused provenance test, typecheck,
+scoped lint/format, `npm run ci:check`, exact range checks, and
+`git diff --check`. Do not run `npm test`, broad/full Test262,
+`npm run test262:upstream`, `npm run test262:upstream:check`,
+`npm run ci:contract`, or full Node/browser/JSC suites for this repair. After
+the exact repair is squash-merged and main is verified, rebuild the semantic M1
+consumer from the corrected pending authority and consume it through the normal
+`roadmap-reclassification:M1` path.
+
 ### Deterministic ES2015 taxonomy and exact promotion
 
 The taxonomy is a timestamp-free, code-unit-sorted classification of the
