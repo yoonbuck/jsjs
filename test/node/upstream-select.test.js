@@ -1149,15 +1149,35 @@ export default [
     },
   },
   {
-    name: 'ES2015 H0 compatibility authorization and merge APIs compose T0 and H0 promotions',
+    name: 'ES2015 promotion authorization and merge APIs compose T0, H0, and M1',
     run: () => {
+      const m1Path = 'test/language/m1-reflect.js';
       const t0Text = json({
         ...promotionFixture(),
         repository: H0_PIN.repository,
         revision: H0_PIN.revision,
       });
+      const m1Text = json({
+        groupName: 'es2015/m1-reflect',
+        version: 2,
+        repository: H0_PIN.repository,
+        revision: H0_PIN.revision,
+        sourceTaxonomySha256: '2'.repeat(64),
+        ledgerSha256: sha256(`${m1Path}\n`),
+        rootCount: 1,
+        variantCount: 2,
+        entries: [
+          {
+            path: m1Path,
+            variants: 2,
+            features: ['m1-feature'],
+            includeFeatures: [],
+          },
+        ],
+      });
       const t0 = parseEs2015Promotion(t0Text);
       const h0 = parseEs2015Promotion(H0_PROMOTION_TEXT);
+      const m1 = parseEs2015Promotion(m1Text);
       const base = parseUpstreamSubset(
         json({
           version: 1,
@@ -1173,13 +1193,19 @@ export default [
         }),
       );
       const h0Only = mergePromotionSubset(base, h0);
-      const merged = mergePromotionSubsets(base, [t0, h0]);
+      const merged = mergePromotionSubsets(base, [t0, h0, m1]);
       const inventory = [
         ...promotionValidationOptions().inventory,
         H0_INVENTORY[1],
+        {
+          path: m1Path,
+          variants: 2,
+          metadata: { features: ['m1-feature'] },
+          includeFeatures: [],
+        },
       ];
       const policy = {
-        es2015Features: ['cross-realm', 'exact-path-feature'],
+        es2015Features: ['cross-realm', 'exact-path-feature', 'm1-feature'],
         neutralFeatures: ['include-path-feature'],
         laterFeatures: ['later-path-feature'],
       };
@@ -1191,7 +1217,7 @@ export default [
         inventory: [H0_INVENTORY[1]],
       });
       const authorizations = createEs2015PromotionAuthorizations({
-        promotionTexts: [t0Text, H0_PROMOTION_TEXT],
+        promotionTexts: [t0Text, H0_PROMOTION_TEXT, m1Text],
         pin: H0_PIN,
         policy,
         subset: merged,
@@ -1204,7 +1230,7 @@ export default [
       );
       assertSame(
         JSON.stringify(merged.groups.map((group) => group.name)),
-        '["baseline","es2015/audit-passing-promotion","es2015/h0-cross-realm-passed"]',
+        '["baseline","es2015/audit-passing-promotion","es2015/h0-cross-realm-passed","es2015/m1-reflect"]',
       );
       assertSame(
         JSON.stringify(
@@ -1225,6 +1251,16 @@ export default [
           authorizations(H0_PASSED_PATH, { features: ['cross-realm'] }),
         ),
         '["cross-realm"]',
+      );
+      assertSame(
+        JSON.stringify(authorizations(m1Path, { features: ['m1-feature'] })),
+        '["m1-feature"]',
+      );
+      assertSame(
+        JSON.stringify(
+          authorizations('test/language/base.js', { features: [] }),
+        ),
+        '[]',
       );
     },
   },

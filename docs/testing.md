@@ -48,6 +48,7 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run test262:fixtures:manifest`                                                                                               | The same fixture tree with the feature allowlist defaulted from `tools/test262/features.json`                                                                                                                                   |
 | `TZ=UTC npm run test262:es2015-release`                                                                                           | Focused pinned Promise+generator+module+object/function+syntax Test262 release gate; does not rewrite broad reports or selection                                                                                                |
 | `TZ=UTC npm run test262:es2015:m0 -- --ledger=tools/test262/es2015-m0-paths.txt --output=.superpowers/issue-79/m0-execution.json` | Execute only the reviewed M0 object-internal-method ledger (240 roots / 459 variants); writes ignored evidence and never invokes a broad selector                                                                               |
+| `TZ=UTC npm run test262:es2015:m1 -- --ledger=tools/test262/es2015-m1-paths.txt --output=.superpowers/issue-80/m1/execution.json` | Execute only the reviewed M1 Reflect ledger (113 roots / 226 variants); writes ignored evidence and never invokes a broad selector                                                                                              |
 | `TZ=UTC npm run test262:es2015:provenance`                                                                                        | Rebuild the immutable unknown-edition provenance foundation, create or canonicalize empty decision fragments, and refuse to overwrite any non-empty fragment                                                                    |
 | `TZ=UTC npm run test262:es2015:provenance:check`                                                                                  | Verify the checked-in unknown-edition provenance foundation and decision fragments without writing; metadata/hash-only and cannot call `runTest262Suite`                                                                        |
 | `TZ=UTC npm run test262:es2015:provenance:ledger -- --render-ledger=UA`                                                           | Render the exact code-unit-sorted ledger for one atomic provenance batch code (`UA`, `UB`, `UL1`-`UL4`, `US1`-`US7`)                                                                                                            |
@@ -83,6 +84,9 @@ PATH="/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers:$PA
 | `npm run ci:generate`                                                                                                             | Regenerate `.github/workflows/ci.yml` from `tools/ci/pipeline.js`                                                                                                                                                               |
 | `npm run ci:check`                                                                                                                | Verify the committed CI workflow matches the pipeline definition (fails if stale)                                                                                                                                               |
 | `npm run prepare`                                                                                                                 | Runs automatically on `npm install`; equivalent to `vendor:sync`                                                                                                                                                                |
+
+The bounded M1 Reflect entry point is `npm run test262:es2015:m1`; invoke it
+only with the exact ledger and an ignored repository-relative output.
 
 ## Suite organization
 
@@ -127,6 +131,8 @@ Thirteen suites need a filesystem and cannot run in the browser or `jsc`:
 - `test/node/es2015-m0.test.js` — validates the exact M0 ledger, bounded focused
   execution, generic authority evidence/projection schemas, and issue-specific
   destinations under the existing shared Reflect/Proxy roadmap blocker.
+- `test/node/es2015-m1.test.js` — validates the exact M1 ledger, bounded Reflect
+  execution, generic scratch evidence/projections, and Proxy residual ownership.
 - `test/node/es2015-taxonomy.test.js` — validates the deterministic ES2015
   taxonomy, exact promotion evidence, and metadata-only audit/check boundary.
 - `test/node/upstream-select.test.js` — validates the generated upstream subset

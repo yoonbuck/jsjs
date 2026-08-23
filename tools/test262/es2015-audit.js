@@ -55,6 +55,7 @@ import {
   supportedFeaturesForPromotedPath,
   validateEs2015Promotion,
 } from './es2015-promotion.js';
+import { ES2015_M1_PROMOTION_FILE } from './es2015-roadmap-promotions.js';
 import {
   COVERAGE_DOCUMENT_FILE,
   collectTest262Inventory,
@@ -93,6 +94,7 @@ const SUBSET_FILE = 'tools/test262/upstream-subset.json';
 const FEATURES_FILE = 'tools/test262/features.json';
 const REPORT_FILE = 'docs/test262-report.jsonl';
 const PROMOTION_GROUP = 'es2015/audit-passing-promotion';
+const M1_PROMOTION_GROUP = 'es2015/m1-reflect';
 const PROVENANCE_DECISIONS_DIRECTORY =
   'tools/test262/es2015-provenance-decisions';
 const ES2015_H0_PATHS_FILE = 'tools/test262/es2015-h0-paths.json';
@@ -200,7 +202,10 @@ export async function main(argv = [], dependencies = {}) {
     deps.readProvenanceManifest(),
     deps.readDecisionFragments(),
   ]);
-  const promotionText = await readOptionalFile(deps, ES2015_PROMOTION_FILE);
+  const [promotionText, m1PromotionText] = await Promise.all([
+    readOptionalPromotion(deps, ES2015_PROMOTION_FILE),
+    readOptionalPromotion(deps, ES2015_M1_PROMOTION_FILE),
+  ]);
   const policy = parseEs2015Policy(policyText);
   const anchors = parseEs2015Anchors(anchorsText);
   const provenanceManifest = parseEs2015ProvenanceManifest(
@@ -219,6 +224,12 @@ export async function main(argv = [], dependencies = {}) {
   assertSubsetPin(subset, pin);
   const features = parseFeatureManifest(featuresText);
   const promotion = parsePromotion(promotionText, subset);
+  const m1Promotion = parsePromotion(
+    m1PromotionText,
+    subset,
+    M1_PROMOTION_GROUP,
+    ES2015_M1_PROMOTION_FILE,
+  );
   const regeneratingH0Disposition = options.writeDisposition !== null;
   const regeneratingH0Promotion =
     options.writePromotion !== null || options.writeOwnerDeltas !== null;
@@ -291,6 +302,9 @@ export async function main(argv = [], dependencies = {}) {
   const t0PromotionPathSet = new Set(
     promotion === null ? [] : promotionPaths(promotion),
   );
+  const m1PromotionPathSet = new Set(
+    m1Promotion === null ? [] : promotionPaths(m1Promotion),
+  );
   const h0PromotionPathSet = new Set(
     h0Promotion === null ? [] : promotionPaths(h0Promotion),
   );
@@ -305,8 +319,10 @@ export async function main(argv = [], dependencies = {}) {
     h0Disposition === null ? {} : h0BlockersFromDisposition(h0Disposition);
   const promotionPathSet = new Set([
     ...t0PromotionPathSet,
+    ...m1PromotionPathSet,
     ...h0PromotionPathSet,
   ]);
+  assertDisjointPromotionPaths([promotion, h0Promotion, m1Promotion]);
 
   const roots = sortStrings(await deps.listRoots()).filter(
     (path) =>
@@ -346,6 +362,14 @@ export async function main(argv = [], dependencies = {}) {
       policy,
       selectedPaths,
       inventory: inventory.filter((root) => t0PromotionPathSet.has(root.path)),
+    });
+  }
+  if (m1Promotion !== null) {
+    validateEs2015Promotion(m1Promotion, {
+      pin,
+      policy,
+      selectedPaths,
+      inventory: inventory.filter((root) => m1PromotionPathSet.has(root.path)),
     });
   }
   if (h0Promotion !== null) {
@@ -400,7 +424,9 @@ export async function main(argv = [], dependencies = {}) {
       check: options.check,
       subset,
       features,
-      promotion,
+      standardPromotions: [promotion, m1Promotion].filter(
+        (candidate) => candidate !== null,
+      ),
       h0Promotion,
       h0DispositionRecords,
       inventory,
@@ -416,8 +442,10 @@ export async function main(argv = [], dependencies = {}) {
           selectedPaths.includes(record.file) &&
           !promotionPathSet.has(record.file),
       ),
-      ...evidence.records.filter((record) =>
-        t0PromotionPathSet.has(record.file),
+      ...evidence.records.filter(
+        (record) =>
+          t0PromotionPathSet.has(record.file) ||
+          m1PromotionPathSet.has(record.file),
       ),
       ...h0DispositionRecords.filter((record) =>
         h0PromotionPathSet.has(record.file),
@@ -430,6 +458,7 @@ export async function main(argv = [], dependencies = {}) {
       ...evidence.records.filter(
         (record) =>
           !t0PromotionPathSet.has(record.file) &&
+          !m1PromotionPathSet.has(record.file) &&
           !h0DispositionPaths.has(record.file),
       ),
       ...h0DispositionRecords.filter(
@@ -462,6 +491,7 @@ export async function main(argv = [], dependencies = {}) {
     reportText,
     auditEvidenceText,
     promotionText,
+    m1PromotionText,
     h0DispositionText,
     h0PromotionText,
     m0DispositionText,
@@ -1249,7 +1279,7 @@ async function resolvePhysicalOutputTarget(candidate) {
  *   check: boolean,
  *   subset: ReturnType<typeof parseUpstreamSubset>,
  *   features: ReturnType<typeof parseFeatureManifest>,
- *   promotion: ReturnType<typeof parseEs2015Promotion> | null,
+ *   standardPromotions: readonly ReturnType<typeof parseEs2015Promotion>[],
  *   h0Promotion: ReturnType<typeof parseEs2015Promotion> | null,
  *   h0DispositionRecords: readonly any[],
  *   inventory: readonly any[],
@@ -1265,7 +1295,7 @@ async function synchronizePromotedReport(options) {
     check,
     subset,
     features,
-    promotion,
+    standardPromotions,
     h0Promotion,
     h0DispositionRecords,
     inventory,
@@ -1273,13 +1303,13 @@ async function synchronizePromotedReport(options) {
     evidence,
     selectedPaths,
   } = options;
-  if (promotion === null && h0Promotion === null) {
+  if (standardPromotions.length === 0 && h0Promotion === null) {
     throw new Es2015AuditError(
       'Promoted-report synchronization requires a reviewed promotion manifest',
     );
   }
 
-  const promotions = [promotion, h0Promotion].filter(
+  const promotions = [...standardPromotions, h0Promotion].filter(
     (candidate) => candidate !== null,
   );
   const promotedPaths = sortStrings(
@@ -1292,7 +1322,7 @@ async function synchronizePromotedReport(options) {
   }
   const promoted = new Set(promotedPaths);
   const standardPromotionPaths = new Set(
-    promotion === null ? [] : promotionPaths(promotion),
+    standardPromotions.flatMap((candidate) => promotionPaths(candidate)),
   );
   const h0PromotionPaths = new Set(
     h0Promotion === null ? [] : promotionPaths(h0Promotion),
@@ -1703,6 +1733,43 @@ async function readOptionalFile(deps, path) {
 }
 
 /**
+ * @param {AuditDependencies} deps
+ * @param {string} path
+ * @returns {Promise<string | null>}
+ */
+async function readOptionalPromotion(deps, path) {
+  try {
+    return await deps.readFile(path);
+  } catch (error) {
+    if (/** @type {any} */ (error)?.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * @param {readonly (ReturnType<typeof parseEs2015Promotion> | null)[]} promotions
+ */
+function assertDisjointPromotionPaths(promotions) {
+  const owners = new Map();
+  for (const promotion of promotions) {
+    if (promotion === null) continue;
+    const group =
+      'groupName' in promotion ? promotion.groupName : PROMOTION_GROUP;
+    for (const path of promotionPaths(promotion)) {
+      const owner = owners.get(path);
+      if (owner !== undefined) {
+        throw new Es2015AuditError(
+          `Promoted-report synchronization has overlapping promotion path ${path} in ${owner} and ${group}`,
+        );
+      }
+      owners.set(path, group);
+    }
+  }
+}
+
+/**
  * @param {ReadonlyMap<string, string> | Record<string, string>} fragments
  * @returns {Map<string, ReturnType<typeof parseEs2015DecisionFragment>>}
  */
@@ -1776,10 +1843,9 @@ function parsePromotion(
   }
 
   const promotion = parseEs2015Promotion(text);
-  if (
-    ('h0LedgerSha256' in promotion ? promotion.groupName : PROMOTION_GROUP) !==
-    groupName
-  ) {
+  const actualGroup =
+    'groupName' in promotion ? promotion.groupName : PROMOTION_GROUP;
+  if (actualGroup !== groupName) {
     throw new Es2015AuditError(`${fileName} must declare ${groupName}`);
   }
   const paths = promotionPaths(promotion);
@@ -2730,6 +2796,7 @@ async function listFiles(directory, prefix = '') {
  *   subsetText: string, featuresText: string, reportText: string,
  *   auditEvidenceText: string,
  *   promotionText: string | null,
+ *   m1PromotionText?: string | null,
  *   h0DispositionText?: string | null,
  *   h0PromotionText?: string | null,
  *   m0DispositionText?: string | null,
@@ -2761,6 +2828,9 @@ function buildArtifact(options) {
       ...(options.promotionText === null
         ? {}
         : { promotionSha256: sha256(options.promotionText) }),
+      ...(options.m1PromotionText == null
+        ? {}
+        : { m1PromotionSha256: sha256(options.m1PromotionText) }),
       ...(options.h0DispositionText == null
         ? {}
         : { h0DispositionSha256: sha256(options.h0DispositionText) }),

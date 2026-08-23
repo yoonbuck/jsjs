@@ -257,7 +257,7 @@ const tests = [
       defineGlobal(realm, 'target', target);
       defineGlobal(realm, 'newTarget', newTarget);
 
-      WeakSet.prototype.has = function has(value) {
+      WeakSet.prototype.has = function has(/** @type {object} */ value) {
         if (value === target) {
           checks.push('target');
         } else if (value === newTarget) {

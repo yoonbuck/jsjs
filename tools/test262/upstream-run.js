@@ -49,6 +49,7 @@ import {
   parseEs2015Promotion,
   promotionPaths,
 } from './es2015-promotion.js';
+import { ES2015_M1_PROMOTION_FILE } from './es2015-roadmap-promotions.js';
 import { formatRecordLine, formatReportLines } from './report.js';
 import { runTest262Suite } from './runner.js';
 import {
@@ -129,6 +130,39 @@ function readRepositoryFile(path) {
 }
 
 /**
+ * @param {(path: string) => Promise<string>} [readPromotion]
+ * @returns {Promise<string[]>}
+ */
+async function readUpstreamPromotionTexts(readPromotion = readRepositoryFile) {
+  const [promotionText, h0PromotionText, m1PromotionText] = await Promise.all([
+    readPromotion(ES2015_PROMOTION_FILE),
+    readPromotion(ES2015_H0_PROMOTION_FILE),
+    readOptionalPromotion(ES2015_M1_PROMOTION_FILE, readPromotion),
+  ]);
+  return [
+    promotionText,
+    h0PromotionText,
+    ...(m1PromotionText === null ? [] : [m1PromotionText]),
+  ];
+}
+
+/**
+ * @param {string} path
+ * @param {(path: string) => Promise<string>} readPromotion
+ * @returns {Promise<string | null>}
+ */
+async function readOptionalPromotion(path, readPromotion) {
+  try {
+    return await readPromotion(path);
+  } catch (error) {
+    if (/** @type {any} */ (error)?.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
  * Refuses to run outside a UTC time zone, because the generated artifacts are
  * committed and checked byte-for-byte against a UTC continuous-integration run.
  *
@@ -200,10 +234,7 @@ export async function main(argv = []) {
   );
   const host = createNodeTest262Host({ root: pin.checkoutPath });
   const paths = upstreamSubsetPaths(subset);
-  const promotionTexts = await Promise.all([
-    readRepositoryFile(ES2015_PROMOTION_FILE),
-    readRepositoryFile(ES2015_H0_PROMOTION_FILE),
-  ]);
+  const promotionTexts = await readUpstreamPromotionTexts();
   const promotions = promotionTexts.map((text) => parseEs2015Promotion(text));
   const promotionRoots = [];
   for (const promotion of promotions) {

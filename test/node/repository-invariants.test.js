@@ -3903,6 +3903,59 @@ export default [
     },
   },
   {
+    name: 'the focused M1 npm entry point cannot reach broad Test262 execution',
+    run: async () => {
+      const manifest = JSON.parse(await readSource('package.json'));
+      const command = manifest.scripts?.['test262:es2015:m1'];
+
+      assertSame(
+        command,
+        'node tools/test262/es2015-m1.js',
+        'package.json must expose only the focused M1 entry point',
+      );
+
+      const entry = 'tools/test262/es2015-m1.js';
+      const pending = [entry];
+      const closure = new Set();
+      while (pending.length > 0) {
+        const file = /** @type {string} */ (pending.shift());
+        if (closure.has(file)) continue;
+        closure.add(file);
+        const source = await readSource(file);
+        for (const specifier of importSpecifiers(source)) {
+          if (!specifier.startsWith('.')) continue;
+          const dependency = resolveRepositoryImport(file, specifier);
+          if (
+            dependency.startsWith('tools/test262/') &&
+            !closure.has(dependency)
+          ) {
+            pending.push(dependency);
+          }
+        }
+      }
+
+      const forbiddenModules = [
+        'tools/test262/es2015-audit.js',
+        'tools/test262/upstream-run.js',
+        'tools/test262/upstream-select.js',
+      ].filter((file) => closure.has(file));
+      const source = await readSource(entry);
+      const forbiddenCalls = [
+        'runTest262(',
+        '.listTests(',
+        'resolveTest262Paths(',
+        'test262:upstream',
+        'test262:upstream:check',
+        'test262:es2015-release',
+      ].filter((token) => source.includes(token));
+
+      assertSame(forbiddenModules.join('\n'), '');
+      assertSame(forbiddenCalls.join('\n'), '');
+      assertSame(source.includes('runTest262Suite({'), true);
+      assertSame(source.includes('verifyM1Ledger('), true);
+    },
+  },
+  {
     name: 'npm run test:node does not transitively depend on an upstream Test262 checkout',
     run: async () => {
       // The node runner must never import modules that require a real Test262

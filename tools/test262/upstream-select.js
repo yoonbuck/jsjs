@@ -42,6 +42,7 @@ import {
   mergePromotionSubsets,
   parseEs2015Promotion,
 } from './es2015-promotion.js';
+import { ES2015_M1_PROMOTION_FILE } from './es2015-roadmap-promotions.js';
 import { assertPinnedCheckout, readTest262Pin } from './upstream-run.js';
 import { inspectEngineGrammar, selectPaths } from './upstream-select-paths.js';
 
@@ -62,6 +63,39 @@ const HARNESS_DIRECTORY = 'harness';
  */
 function readRepositoryFile(path) {
   return readFile(new URL(path, REPOSITORY_ROOT_URL), 'utf8');
+}
+
+/**
+ * @param {(path: string) => Promise<string>} [readPromotion]
+ * @returns {Promise<string[]>}
+ */
+async function readSelectionPromotionTexts(readPromotion = readRepositoryFile) {
+  const [promotionText, h0PromotionText, m1PromotionText] = await Promise.all([
+    readPromotion(ES2015_PROMOTION_FILE),
+    readPromotion(ES2015_H0_PROMOTION_FILE),
+    readOptionalPromotion(ES2015_M1_PROMOTION_FILE, readPromotion),
+  ]);
+  return [
+    promotionText,
+    h0PromotionText,
+    ...(m1PromotionText === null ? [] : [m1PromotionText]),
+  ];
+}
+
+/**
+ * @param {string} path
+ * @param {(path: string) => Promise<string>} readPromotion
+ * @returns {Promise<string | null>}
+ */
+async function readOptionalPromotion(path, readPromotion) {
+  try {
+    return await readPromotion(path);
+  } catch (error) {
+    if (/** @type {any} */ (error)?.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -147,19 +181,14 @@ export async function main(argv = []) {
 
   await assertPinnedCheckout(pin);
 
-  const [policyText, knownGoodText, promotionText, h0PromotionText] =
-    await Promise.all([
-      readRepositoryFile(ES5_SELECTION_FILE),
-      readRepositoryFile(KNOWN_GOOD_SUBSET_FILE),
-      readRepositoryFile(ES2015_PROMOTION_FILE),
-      readRepositoryFile(ES2015_H0_PROMOTION_FILE),
-    ]);
+  const [policyText, knownGoodText, promotionTexts] = await Promise.all([
+    readRepositoryFile(ES5_SELECTION_FILE),
+    readRepositoryFile(KNOWN_GOOD_SUBSET_FILE),
+    readSelectionPromotionTexts(),
+  ]);
   const policy = parseEs5Selection(policyText);
   const knownGoodSubset = parseUpstreamSubset(knownGoodText);
-  const promotions = [
-    parseEs2015Promotion(promotionText),
-    parseEs2015Promotion(h0PromotionText),
-  ];
+  const promotions = promotionTexts.map((text) => parseEs2015Promotion(text));
 
   if (
     knownGoodSubset.repository !== pin.repository ||
