@@ -1,9 +1,13 @@
 import { EngineArray } from '../runtime/array-object.js';
+import { callCallable, constructCallable } from '../runtime/capabilities.js';
 import { GuestErrorSignal } from '../runtime/completion.js';
 import { EngineObject, defineOwnPropertyOrThrow } from '../runtime/object.js';
 import { toPropertyKey } from '../runtime/conversion.js';
 import {
+  createListFromArrayLike,
   fromPropertyDescriptor,
+  requireCallable,
+  requireConstructor,
   requireObjectReceiver,
   toPropertyDescriptor,
 } from './shared.js';
@@ -62,6 +66,48 @@ export function createReflectIntrinsics(realm) {
     enumerable: false,
     configurable: true,
   });
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'apply',
+    3,
+    (_this, args, _functionObject, callerRealm) => {
+      const target = requireCallable(
+        args[0],
+        'Reflect.apply target is not callable',
+      );
+      const argumentsList = createListFromArrayLike(args[2], realm);
+      return callCallable(target, args[1], argumentsList, callerRealm ?? realm);
+    },
+  );
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'construct',
+    2,
+    (_this, args, _functionObject, callerRealm) => {
+      const target = requireConstructor(
+        args[0],
+        'Reflect.construct target is not a constructor',
+      );
+      const newTarget =
+        args.length < 3
+          ? target
+          : requireConstructor(
+              args[2],
+              'Reflect.construct newTarget is not a constructor',
+            );
+      const argumentsList = createListFromArrayLike(args[1], realm);
+      return constructCallable(
+        target,
+        argumentsList,
+        newTarget,
+        callerRealm ?? realm,
+      );
+    },
+  );
 
   defineReflectMethod(
     realm,
