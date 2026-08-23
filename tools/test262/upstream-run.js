@@ -44,13 +44,13 @@ import {
 import { createJsjsTest262Engine } from './engine.js';
 import {
   ES2015_H0_PROMOTION_FILE,
-  createPromotionReportFeaturesForPath,
   createEs2015PromotionAuthorizations,
   ES2015_PROMOTION_FILE,
   parseEs2015Promotion,
   promotionPaths,
 } from './es2015-promotion.js';
 import { ES2015_M1_PROMOTION_FILE } from './es2015-roadmap-promotions.js';
+import { createPromotionReportFeaturesForPath } from './promotion-report-features.js';
 import { formatRecordLine, formatReportLines } from './report.js';
 import { runTest262Suite } from './runner.js';
 import {

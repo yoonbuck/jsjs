@@ -21,7 +21,6 @@ import {
   buildEs2015Promotion,
   createEs2015PromotionAuthorization,
   createEs2015PromotionAuthorizations,
-  createPromotionReportFeaturesForPath,
   Es2015PromotionError,
   mergePromotionSubset,
   mergePromotionSubsets,
@@ -45,6 +44,7 @@ import {
   parseUpstreamSubset,
   upstreamSubsetPaths,
 } from '../../tools/test262/upstream.js';
+import { createPromotionReportFeaturesForPath } from '../../tools/test262/promotion-report-features.js';
 
 const { structuredClone } = globalThis;
 const EXCLUDED_PATH = 'test/staging/not-read.js';
