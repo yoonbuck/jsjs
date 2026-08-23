@@ -83,6 +83,7 @@ import {
 import { assertPinnedCheckout, readTest262Pin } from './pin.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
+const M1_PROMOTION_GROUP = 'es2015/m1-reflect';
 
 /** Re-exported for consumers that import from this module. */
 export {
@@ -163,6 +164,18 @@ async function readOptionalPromotion(path, readPromotion) {
 }
 
 /**
+ * @param {ReturnType<typeof parseEs2015Promotion>} promotion
+ * @returns {(file: string) => readonly string[] | undefined}
+ */
+export function createPromotionReportFeaturesForPath(promotion) {
+  const featuresByPath = new Map(
+    promotion.entries.map((entry) => [entry.path, entry.features]),
+  );
+
+  return (file) => featuresByPath.get(file);
+}
+
+/**
  * Refuses to run outside a UTC time zone, because the generated artifacts are
  * committed and checked byte-for-byte against a UTC continuous-integration run.
  *
@@ -236,6 +249,14 @@ export async function main(argv = []) {
   const paths = upstreamSubsetPaths(subset);
   const promotionTexts = await readUpstreamPromotionTexts();
   const promotions = promotionTexts.map((text) => parseEs2015Promotion(text));
+  const m1Promotion = promotions.find(
+    (promotion) =>
+      'groupName' in promotion && promotion.groupName === M1_PROMOTION_GROUP,
+  );
+  const reportFeaturesForPath =
+    m1Promotion === undefined
+      ? undefined
+      : createPromotionReportFeaturesForPath(m1Promotion);
   const promotionRoots = [];
   for (const promotion of promotions) {
     for (const path of promotionPaths(promotion)) {
@@ -260,6 +281,7 @@ export async function main(argv = []) {
     paths,
     supportedFeatures,
     supportedFeaturesForPath,
+    reportFeaturesForPath,
   });
   const coverage = summarizeTest262Coverage({
     inventory: await collectTest262Inventory({ host }),

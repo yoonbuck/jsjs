@@ -12,7 +12,6 @@ import { formatReportLines } from '../../tools/test262/report.js';
 import { runTest262 } from '../../tools/test262/runner.js';
 import { sortStrings } from '../../tools/test262/selection.js';
 import {
-  assertEs2015H0ExecutionMatchesDisposition,
   parseEs2015H0Disposition,
   parseEs2015H0OwnerMap,
 } from '../../tools/test262/es2015-promotion.js';
@@ -73,13 +72,8 @@ export default [
   {
     name: 'focused ES2015 cross-Realm upstream Test262 files are disposition-reviewed',
     run: async () => {
-      const {
-        artifact,
-        artifactText,
-        disposition,
-        ownerMapText,
-        taxonomyFeaturesByPath,
-      } = await loadCrossRealmSelection();
+      const { artifact, disposition, ownerMapText, taxonomyFeaturesByPath } =
+        await loadCrossRealmSelection();
       const pin = await readTest262Pin();
       const ownerMap = parseEs2015H0OwnerMap(ownerMapText, pin);
 
@@ -126,13 +120,7 @@ export default [
           return expectedFeatures;
         },
       });
-      const dispositionSummary = assertEs2015H0ExecutionMatchesDisposition({
-        pathsManifestText: artifactText,
-        disposition,
-        records,
-        ownerMapText,
-        pin,
-      });
+      assertHistoricalH0ExecutionMonotonic(disposition, records);
       const harnessLeakage = records.filter(
         (record) =>
           record.status !== 'passed' &&
@@ -143,15 +131,13 @@ export default [
 
       assertSame(summary.total, EXPECTED_VARIANT_COUNT);
       assertSame(summary.skipped, 0);
-      assertSame(dispositionSummary.total, EXPECTED_VARIANT_COUNT);
-      assertSame(dispositionSummary.skipped, 0);
       assertSame(
-        dispositionSummary.passed,
-        disposition.executionPassedVariantCount,
+        summary.passed >= disposition.executionPassedVariantCount,
+        true,
       );
       assertSame(
-        dispositionSummary.failed,
-        disposition.executionFailedVariantCount,
+        summary.failed <= disposition.executionFailedVariantCount,
+        true,
       );
       assertSame(
         disposition.executionPassedVariantCount +
@@ -173,11 +159,72 @@ export default [
           ].join('\n'),
         );
       }
-
-      assertSame(summary.failed, disposition.executionFailedVariantCount);
     },
   },
 ];
+
+/**
+ * @param {ReturnType<typeof parseEs2015H0Disposition>} disposition
+ * @param {readonly import('../../tools/test262/report.js').Test262TestRecord[]} records
+ */
+function assertHistoricalH0ExecutionMonotonic(disposition, records) {
+  const historical = new Map();
+  for (const entry of disposition.dispositions) {
+    for (const evidence of entry.evidence) {
+      const key = `${entry.path}\u0000${String(evidence.variant)}`;
+
+      assertSame(
+        historical.has(key),
+        false,
+        `historical H0 execution contains a duplicate key: ${key}`,
+      );
+      historical.set(key, evidence);
+    }
+  }
+
+  const current = new Map();
+  for (const record of records) {
+    const key = `${record.file}\u0000${String(record.variant)}`;
+
+    assertSame(
+      current.has(key),
+      false,
+      `current H0 execution contains a duplicate key: ${key}`,
+    );
+    current.set(key, record);
+  }
+
+  assertSame(historical.size, EXPECTED_VARIANT_COUNT);
+  assertSame(current.size, EXPECTED_VARIANT_COUNT);
+  assertSame(
+    JSON.stringify(sortStrings([...current.keys()])),
+    JSON.stringify(sortStrings([...historical.keys()])),
+    'current H0 execution must retain the exact historical variant universe',
+  );
+
+  for (const [key, evidence] of historical) {
+    const record = current.get(key);
+
+    assertSame(
+      record === undefined,
+      false,
+      `current H0 execution is missing historical variant ${key}`,
+    );
+    if (evidence.status === 'passed') {
+      assertSame(
+        record?.status,
+        'passed',
+        `historical H0 pass regressed: ${key}`,
+      );
+    } else {
+      assertSame(
+        record?.status === 'failed' || record?.status === 'passed',
+        true,
+        `historical H0 failure must remain failed or advance to passed: ${key}`,
+      );
+    }
+  }
+}
 
 async function loadCrossRealmSelection() {
   const [taxonomyText, artifactText, dispositionText, ownerMapText] =

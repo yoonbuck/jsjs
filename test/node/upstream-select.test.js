@@ -44,6 +44,7 @@ import {
   parseUpstreamSubset,
   upstreamSubsetPaths,
 } from '../../tools/test262/upstream.js';
+import * as upstreamRunModule from '../../tools/test262/upstream-run.js';
 
 const { structuredClone } = globalThis;
 const EXCLUDED_PATH = 'test/staging/not-read.js';
@@ -90,6 +91,23 @@ const PRE_PROMOTION_TAXONOMY_SHA256 =
   'ce05cbdf15ee3262651520f81ca7e904e021cd4dfcbb29d787b69b4f8f897e31';
 const PRE_PROMOTION_GROUPS_SHA256 =
   '064be556b3e98debaca2287097c2ab431283906df57a82dd5c6aba01227440f8';
+const M1_REPORT_ORDER_DIVERGENT_PATHS = Object.freeze([
+  'test/built-ins/Reflect/Symbol.toStringTag.js',
+  'test/built-ins/Reflect/apply/arguments-list-is-not-array-like-but-still-valid.js',
+  'test/built-ins/Reflect/apply/arguments-list-is-not-array-like.js',
+  'test/built-ins/Reflect/apply/not-a-constructor.js',
+  'test/built-ins/Reflect/construct/not-a-constructor.js',
+  'test/built-ins/Reflect/defineProperty/not-a-constructor.js',
+  'test/built-ins/Reflect/deleteProperty/not-a-constructor.js',
+  'test/built-ins/Reflect/get/not-a-constructor.js',
+  'test/built-ins/Reflect/getOwnPropertyDescriptor/not-a-constructor.js',
+  'test/built-ins/Reflect/getPrototypeOf/not-a-constructor.js',
+  'test/built-ins/Reflect/has/not-a-constructor.js',
+  'test/built-ins/Reflect/isExtensible/not-a-constructor.js',
+  'test/built-ins/Reflect/preventExtensions/not-a-constructor.js',
+  'test/built-ins/Reflect/set/not-a-constructor.js',
+  'test/built-ins/Reflect/setPrototypeOf/not-a-constructor.js',
+]);
 const H0_PIN = Object.freeze({
   repository: 'https://github.com/tc39/test262.git',
   revision: 'b363f29d3c43c626dc852744ad64a0b48a003693',
@@ -1518,6 +1536,78 @@ export default [
       assertSame(
         sha256(JSON.stringify(preExistingGroups)),
         PRE_PROMOTION_GROUPS_SHA256,
+      );
+    },
+  },
+  {
+    name: 'upstream report feature authority is scoped to exact M1 roots',
+    run: async () => {
+      const createReportFeatures =
+        upstreamRunModule.createPromotionReportFeaturesForPath;
+      assertSame(typeof createReportFeatures, 'function');
+      if (typeof createReportFeatures !== 'function') return;
+      const [promotionText, h0PromotionText, m1PromotionText] =
+        await Promise.all([
+          readFile(
+            new URL('tools/test262/es2015-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/es2015-h0-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/es2015-m1-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+        ]);
+      const promotion = parseEs2015Promotion(promotionText);
+      const h0Promotion = parseEs2015Promotion(h0PromotionText);
+      const m1Promotion = parseEs2015Promotion(m1PromotionText);
+      const reportFeaturesForPath = createReportFeatures(m1Promotion);
+
+      assertSame(m1Promotion.entries.length, 103);
+      for (const entry of m1Promotion.entries) {
+        assertSame(
+          JSON.stringify(reportFeaturesForPath(entry.path)),
+          JSON.stringify(entry.features),
+          `M1 report feature authority drifted for ${entry.path}`,
+        );
+      }
+
+      const divergent = [];
+      for (const entry of m1Promotion.entries) {
+        const source = await readFile(
+          new URL(`vendor/test262/${entry.path}`, REPOSITORY_ROOT),
+          'utf8',
+        );
+        const metadata = parseTest262Metadata(source);
+        if (
+          JSON.stringify(reportFeaturesForPath(entry.path)) !==
+          JSON.stringify(metadata.features)
+        ) {
+          divergent.push(entry.path);
+        }
+      }
+      assertSame(
+        JSON.stringify(divergent),
+        JSON.stringify(M1_REPORT_ORDER_DIVERGENT_PATHS),
+      );
+      assertSame(
+        promotionPaths(promotion).every(
+          (path) => reportFeaturesForPath(path) === undefined,
+        ),
+        true,
+      );
+      assertSame(
+        promotionPaths(h0Promotion).every(
+          (path) => reportFeaturesForPath(path) === undefined,
+        ),
+        true,
+      );
+      assertSame(
+        reportFeaturesForPath('test/language/nonpromotion.js'),
+        undefined,
       );
     },
   },
