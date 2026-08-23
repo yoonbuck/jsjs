@@ -154,6 +154,67 @@ const H0_BOOTSTRAP_REPAIR_BASE = '03a4ccadb2b07fa7d3c1ad0f599608b0a7c31efd';
 const H0_BOOTSTRAP_REPAIR_PROFILE = 'h0-bootstrap-repair';
 const H0_BOOTSTRAP_REPAIR_BASE_MANIFEST_SHA256 =
   'a2b0b43085376ab65069829252b8a8dae2da538e5e3cf4a0a0e937725ca72974';
+const M1_AUTHORITY_REPAIR_BASE = '554afc367657439d116d23f4477bb24787a0e261';
+const M1_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256 =
+  'abc71cd2ac6284b8a67cf1dbe98b507a9a6f71fda478998aa27520869ff97f19';
+const M1_AUTHORITY_REPAIR_BASE_CHECKER_SHA256 =
+  'bb7513d190af22f377d451bdfa1618c6b808ccd40a5e534c34f7ebcdc57ea409';
+const M1_AUTHORITY_REPAIR_BASE_RECORD_SHA256 =
+  '5ee279b8b9c836fbb039caf83a5de0f73b31f427133214e4fd250871bc2345f8';
+const M1_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256 =
+  'c12f0cc983141fccfc132dd7d872a29022192d33d72389eac9960c3403b21fbf';
+const M1_AUTHORITY_REPAIR_HEAD_RECORD_SHA256 =
+  '42f7193e216332d40b3c852ae3a4d96aa5c24c29533c8cf344ced59b5b207670';
+const M1_AUTHORITY_REPAIR_PROFILE = 'm1-authority-repair';
+const M1_AUTHORITY_REPAIR_PROMOTION_PATH =
+  'tools/test262/es2015-m1-promotion.json';
+const M1_AUTHORITY_REPAIR_PROMOTION_SHA256 =
+  '31f807a05d56d35762cd5457f779624df04f11ef482b3d1bcb60be3a06883c69';
+const M1_AUTHORITY_REPAIR_PROJECT_PROJECTIONS = Object.freeze({
+  'docs/conformance.md':
+    '79a033c365600cceb1f337bcc680bfdd76b095be0a6b5fb64db604c784cce65b',
+  'docs/test262-report.jsonl':
+    'b1968f16a04240ce1169430f695f01a4ee013fdbf2ba3dcdd38b4ccabdcc225f',
+  'tools/test262/es2015-taxonomy.json':
+    'a7b4dbd0334bd5ca34a25c80b156a051c444c989d8b87ba6ae18d34a7ca0078c',
+  'tools/test262/upstream-subset.json':
+    'bd59cfd5496a3c180a99240b6611d1efe0141b931c63d13fd897dc0c1b25cdf3',
+});
+const M1_AUTHORITY_REPAIR_SELECTION_OUTPUT = Object.freeze({
+  path: ES5_SELECTION_FILE,
+  operation: 'replace-exact',
+  baseSha256:
+    '533e0b9fc165a026d64c4e64d783cf2585de7236600acacf228f06d27f23d8c8',
+  headSha256:
+    '78ac694beb258be0b67c7788137c736b0b30cf7457e3a903d364d38c038b48df',
+  projectionSha256: null,
+});
+const M1_AUTHORITY_REPAIR_CHANGES = Object.freeze([
+  Object.freeze({
+    status: 'M',
+    path: 'tools/test262/es2015-provenance-check.js',
+  }),
+  Object.freeze({
+    status: 'M',
+    path: ES2015_PROVENANCE_FILE,
+  }),
+  Object.freeze({
+    status: 'M',
+    path: 'test/node/es2015-provenance.test.js',
+  }),
+  Object.freeze({
+    status: 'M',
+    path: 'docs/testing.md',
+  }),
+  Object.freeze({
+    status: 'A',
+    path: 'docs/superpowers/specs/2026-08-23-m1-authority-repair-design.md',
+  }),
+  Object.freeze({
+    status: 'A',
+    path: 'docs/superpowers/plans/2026-08-23-m1-authority-repair.md',
+  }),
+]);
 const H0_BOOTSTRAP_REPAIR_PATHS = Object.freeze([
   'docs/superpowers/plans/2026-08-21-h0-policy-bootstrap-repair.md',
   'docs/superpowers/specs/2026-08-21-h0-policy-bootstrap-repair-design.md',
@@ -218,8 +279,19 @@ export class Es2015ProvenanceCheckError extends Error {
  * @typedef {{ kind: 'consume', text: string, code: string, issue: number, profile: string, base: string, sourcePathSha256: string, sourceEntrySha256: string | null, protectedProjectionSha256: string }} RoadmapConsumptionMarker
  * @typedef {RoadmapMigrationMarker | RoadmapPreparationMarker | RoadmapConsumptionMarker} RoadmapMarker
  * @typedef {{ kind: 'h0-bootstrap-repair', text: string, base: string, baseManifestSha256: string }} H0BootstrapRepairMarker
+ * @typedef {{
+ *   kind: 'm1-authority-repair',
+ *   text: string,
+ *   code: 'M1',
+ *   issue: 80,
+ *   base: string,
+ *   baseManifestSha256: string,
+ *   baseRecordSha256: string,
+ *   headManifestSha256: string,
+ *   headRecordSha256: string,
+ * }} M1AuthorityRepairMarker
  * @typedef {{ text: string, profile: string, baseLedgerSha256: string }} LegacyRangeMarker
- * @typedef {LegacyRangeMarker | RoadmapMarker | H0BootstrapRepairMarker} ProvenanceRangeMarker
+ * @typedef {LegacyRangeMarker | RoadmapMarker | H0BootstrapRepairMarker | M1AuthorityRepairMarker} ProvenanceRangeMarker
  */
 
 /**
@@ -693,6 +765,16 @@ async function checkRange(deps, options) {
   if (marker === null) return;
 
   const baseManifestText = await deps.readGitFile(base, ES2015_PROVENANCE_FILE);
+  if (isM1AuthorityRepairMarker(marker)) {
+    await validateM1AuthorityRepairRange(marker, {
+      deps,
+      base,
+      head,
+      changes,
+      baseManifestText,
+    });
+    return;
+  }
   if (isH0BootstrapRepairMarker(marker)) {
     await validateH0BootstrapRepairRange(marker, {
       deps,
@@ -871,6 +953,14 @@ function isH0BootstrapRepairMarker(marker) {
   );
 }
 
+/** @param {ProvenanceRangeMarker} marker @returns {marker is M1AuthorityRepairMarker} */
+function isM1AuthorityRepairMarker(marker) {
+  return (
+    Object.prototype.hasOwnProperty.call(marker, 'kind') &&
+    /** @type {{ kind?: unknown }} */ (marker).kind === 'm1-authority-repair'
+  );
+}
+
 /** @param {ProvenanceRangeMarker} marker @returns {marker is RoadmapMarker} */
 function isRoadmapMarker(marker) {
   return (
@@ -883,6 +973,9 @@ function isRoadmapMarker(marker) {
 
 /** @param {ProvenanceRangeMarker} marker */
 function rangeProfileForMarker(marker) {
+  if (isM1AuthorityRepairMarker(marker)) {
+    return M1_AUTHORITY_REPAIR_PROFILE;
+  }
   if (isH0BootstrapRepairMarker(marker)) {
     return H0_BOOTSTRAP_REPAIR_PROFILE;
   }
@@ -896,6 +989,491 @@ function rangeProfileForMarker(marker) {
       return marker.profile;
     default:
       throw new Error('Unhandled roadmap marker kind');
+  }
+}
+
+/**
+ * @param {M1AuthorityRepairMarker} marker
+ * @param {{
+ *   deps: ProvenanceCheckDependencies,
+ *   base: string,
+ *   head: string,
+ *   changes: readonly { status: string, path: string, sourcePath: string | null }[],
+ *   baseManifestText: string | null,
+ * }} context
+ */
+export async function validateM1AuthorityRepairRange(marker, context) {
+  const { deps, base, head, changes, baseManifestText } = context;
+  if (deps.environment.GITHUB_EVENT_NAME !== 'pull_request') {
+    throw new Es2015ProvenanceCheckError(
+      'M1 authority repair requires an ordinary pull_request event',
+    );
+  }
+  if (base !== M1_AUTHORITY_REPAIR_BASE) {
+    throw new Es2015ProvenanceCheckError(
+      `M1 authority repair range requires base ${M1_AUTHORITY_REPAIR_BASE}`,
+    );
+  }
+  if ((await deps.mergeBase(base, head)) !== M1_AUTHORITY_REPAIR_BASE) {
+    throw new Es2015ProvenanceCheckError(
+      `M1 authority repair merge base must be ${M1_AUTHORITY_REPAIR_BASE}`,
+    );
+  }
+  if (marker.base !== M1_AUTHORITY_REPAIR_BASE) {
+    throw new Es2015ProvenanceCheckError(
+      `M1 authority repair marker base must be ${M1_AUTHORITY_REPAIR_BASE}`,
+    );
+  }
+  if (marker.baseManifestSha256 !== M1_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256) {
+    throw new Es2015ProvenanceCheckError(
+      `M1 authority repair marker base-manifest-sha256 must be ${M1_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256}`,
+    );
+  }
+  if (marker.baseRecordSha256 !== M1_AUTHORITY_REPAIR_BASE_RECORD_SHA256) {
+    throw new Es2015ProvenanceCheckError(
+      `M1 authority repair marker base-record-sha256 must be ${M1_AUTHORITY_REPAIR_BASE_RECORD_SHA256}`,
+    );
+  }
+  if (marker.headManifestSha256 !== M1_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256) {
+    throw new Es2015ProvenanceCheckError(
+      `M1 authority repair marker head-manifest-sha256 must be ${M1_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256}`,
+    );
+  }
+  if (marker.headRecordSha256 !== M1_AUTHORITY_REPAIR_HEAD_RECORD_SHA256) {
+    throw new Es2015ProvenanceCheckError(
+      `M1 authority repair marker head-record-sha256 must be ${M1_AUTHORITY_REPAIR_HEAD_RECORD_SHA256}`,
+    );
+  }
+  if (
+    baseManifestText === null ||
+    sha256(baseManifestText) !== M1_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `M1 authority repair BASE manifest sha256 must be ${M1_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256}`,
+    );
+  }
+  const baseCheckerText = await readRequiredGitFile(deps, base, CHECKER_PATH);
+  if (sha256(baseCheckerText) !== M1_AUTHORITY_REPAIR_BASE_CHECKER_SHA256) {
+    throw new Es2015ProvenanceCheckError(
+      `M1 authority repair BASE checker sha256 must be ${M1_AUTHORITY_REPAIR_BASE_CHECKER_SHA256}`,
+    );
+  }
+
+  await validateM1AuthorityRepairChanges(changes, context);
+  const baseManifest = parseRangeManifest(
+    baseManifestText,
+    'M1 authority repair base',
+  );
+  const headManifestText = await readRequiredGitFile(
+    deps,
+    head,
+    ES2015_PROVENANCE_FILE,
+  );
+  const headManifest = parseRangeManifest(
+    headManifestText,
+    'M1 authority repair head',
+  );
+  if (baseManifest.version !== 3 || headManifest.version !== 3) {
+    throw new Es2015ProvenanceCheckError(
+      'M1 authority repair requires canonical schema-v3 BASE and HEAD manifests',
+    );
+  }
+  const baseM1 = baseManifest.roadmapAuthorities?.find(
+    (/** @type {{ code: string }} */ authority) => authority.code === 'M1',
+  );
+  if (
+    baseM1 === undefined ||
+    canonicalRoadmapAuthoritySha256(baseM1) !==
+      M1_AUTHORITY_REPAIR_BASE_RECORD_SHA256
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `M1 authority repair BASE M1 record sha256 must be ${M1_AUTHORITY_REPAIR_BASE_RECORD_SHA256}`,
+    );
+  }
+  const headM1 = assertM1AuthorityRepairManifestDelta(
+    baseManifest,
+    headManifest,
+  );
+  if (
+    canonicalRoadmapAuthoritySha256(headM1) !==
+    M1_AUTHORITY_REPAIR_HEAD_RECORD_SHA256
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `M1 authority repair HEAD M1 record sha256 must be ${M1_AUTHORITY_REPAIR_HEAD_RECORD_SHA256}`,
+    );
+  }
+  if (sha256(headManifestText) !== M1_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256) {
+    throw new Es2015ProvenanceCheckError(
+      `M1 authority repair HEAD manifest sha256 must be ${M1_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256}`,
+    );
+  }
+  await assertM1AuthorityRepairImmutableBytes(baseManifest, context);
+}
+
+/**
+ * @param {readonly { status: string, path: string, sourcePath: string | null }[]} changes
+ * @param {{ deps: ProvenanceCheckDependencies, base: string, head: string }} context
+ */
+async function validateM1AuthorityRepairChanges(changes, context) {
+  /** @type {Map<string, string>} */
+  const expectedByPath = new Map(
+    M1_AUTHORITY_REPAIR_CHANGES.map((change) => [change.path, change.status]),
+  );
+  const changedPaths = new Set();
+  for (const change of changes) {
+    if (change.status.startsWith('R')) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair range forbids rename ${change.sourcePath} -> ${change.path}`,
+      );
+    }
+    if (change.status.startsWith('C')) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair range forbids copy ${change.sourcePath} -> ${change.path}`,
+      );
+    }
+    if (change.status === 'D') {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair range forbids deleted path ${change.path}`,
+      );
+    }
+    if (!['A', 'M'].includes(change.status)) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair range has unknown git status ${change.status}`,
+      );
+    }
+    if (canonicalRepositoryPath(change.path) !== change.path) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair range path must be canonical: ${change.path}`,
+      );
+    }
+    const expectedStatus = expectedByPath.get(change.path);
+    if (expectedStatus === undefined) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair range includes unexpected path ${change.path}`,
+      );
+    }
+    if (changedPaths.has(change.path)) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair range repeats changed path ${change.path}`,
+      );
+    }
+    if (change.status !== expectedStatus) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair range requires ${expectedStatus} ${change.path}`,
+      );
+    }
+    changedPaths.add(change.path);
+  }
+  for (const change of M1_AUTHORITY_REPAIR_CHANGES) {
+    if (!changedPaths.has(change.path)) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair range requires ${change.status} ${change.path}`,
+      );
+    }
+  }
+  if (context.deps.readGitMode === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      'M1 authority repair range cannot attest regular-file modes',
+    );
+  }
+  for (const change of M1_AUTHORITY_REPAIR_CHANGES) {
+    const [baseMode, headMode] = await Promise.all([
+      context.deps.readGitMode(context.base, change.path),
+      context.deps.readGitMode(context.head, change.path),
+    ]);
+    if (change.status === 'A') {
+      if (baseMode !== null) {
+        throw new Es2015ProvenanceCheckError(
+          `M1 authority repair range path ${change.path} must be absent from BASE`,
+        );
+      }
+    } else if (baseMode === null || !REGULAR_GIT_FILE_MODES.has(baseMode)) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair range path ${change.path} must be a regular file in BASE`,
+      );
+    }
+    if (headMode === null || !REGULAR_GIT_FILE_MODES.has(headMode)) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair range path ${change.path} must be a regular file in HEAD`,
+      );
+    }
+  }
+}
+
+/**
+ * @param {ReturnType<typeof parseEs2015ProvenanceManifest>} baseManifest
+ * @param {ReturnType<typeof parseEs2015ProvenanceManifest>} headManifest
+ */
+function assertM1AuthorityRepairManifestDelta(baseManifest, headManifest) {
+  const {
+    roadmapAuthorities: baseAuthorities = [],
+    ...baseManifestWithoutAuthorities
+  } = baseManifest;
+  const {
+    roadmapAuthorities: headAuthorities = [],
+    ...headManifestWithoutAuthorities
+  } = headManifest;
+  if (
+    json(baseManifestWithoutAuthorities) !==
+    json(headManifestWithoutAuthorities)
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      'M1 authority repair must preserve all non-authority manifest data',
+    );
+  }
+  if (
+    baseAuthorities.length !== headAuthorities.length ||
+    json(
+      baseAuthorities.map(
+        (/** @type {{ code: string }} */ authority) => authority.code,
+      ),
+    ) !==
+      json(
+        headAuthorities.map(
+          (/** @type {{ code: string }} */ authority) => authority.code,
+        ),
+      )
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      'M1 authority repair must preserve roadmap authority count and order',
+    );
+  }
+  const baseM1 = baseAuthorities.find(
+    (/** @type {{ code: string }} */ authority) => authority.code === 'M1',
+  );
+  const headM1 = headAuthorities.find(
+    (/** @type {{ code: string }} */ authority) => authority.code === 'M1',
+  );
+  if (baseM1 === undefined || headM1 === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      'M1 authority repair must preserve roadmap authority count and order',
+    );
+  }
+  for (let index = 0; index < baseAuthorities.length; index += 1) {
+    const baseAuthority = baseAuthorities[index];
+    const headAuthority = headAuthorities[index];
+    if (baseAuthority.code === 'M1') continue;
+    if (
+      canonicalRoadmapAuthoritySha256(baseAuthority) !==
+      canonicalRoadmapAuthoritySha256(headAuthority)
+    ) {
+      throw new Es2015ProvenanceCheckError(
+        `${baseAuthority.code} roadmap authority must remain canonical during M1 authority repair`,
+      );
+    }
+  }
+
+  if (headM1.state !== 'pending') {
+    throw new Es2015ProvenanceCheckError(
+      'M1 authority repair must keep M1 pending',
+    );
+  }
+  for (const field of ['code', 'issue', 'parentIssue']) {
+    if (headM1[field] !== baseM1[field]) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair must preserve M1 ${field}`,
+      );
+    }
+  }
+  for (const field of ['source', 'reconciliation', 'destinations']) {
+    if (json(headM1[field]) !== json(baseM1[field])) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair must preserve M1 ${field}`,
+      );
+    }
+  }
+
+  if (headM1.evidence.length !== 6) {
+    throw new Es2015ProvenanceCheckError(
+      'M1 authority repair requires exactly 6 M1 evidence entries',
+    );
+  }
+  if (
+    json(
+      headM1.evidence.map(
+        (/** @type {{ path: string }} */ entry) => entry.path,
+      ),
+    ) !==
+    json(
+      baseM1.evidence.map(
+        (/** @type {{ path: string }} */ entry) => entry.path,
+      ),
+    )
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      'M1 authority repair must preserve M1 evidence paths and order',
+    );
+  }
+  for (const baseEvidence of baseM1.evidence) {
+    const headEvidence = headM1.evidence.find(
+      (/** @type {{ path: string }} */ entry) =>
+        entry.path === baseEvidence.path,
+    );
+    if (baseEvidence.path === M1_AUTHORITY_REPAIR_PROMOTION_PATH) {
+      if (
+        json(headEvidence) !==
+        json({
+          ...baseEvidence,
+          sha256: M1_AUTHORITY_REPAIR_PROMOTION_SHA256,
+        })
+      ) {
+        throw new Es2015ProvenanceCheckError(
+          'M1 authority repair requires the exact corrected M1 promotion evidence',
+        );
+      }
+      continue;
+    }
+    if (json(headEvidence) !== json(baseEvidence)) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair must preserve M1 evidence ${baseEvidence.path}`,
+      );
+    }
+  }
+
+  const selectionOutput = headM1.protectedOutputs.find(
+    (/** @type {{ path: string }} */ output) =>
+      output.path === ES5_SELECTION_FILE,
+  );
+  if (json(selectionOutput) !== json(M1_AUTHORITY_REPAIR_SELECTION_OUTPUT)) {
+    throw new Es2015ProvenanceCheckError(
+      'M1 authority repair requires the exact M1 selection replacement output',
+    );
+  }
+  if (headM1.protectedOutputs.length !== 12) {
+    throw new Es2015ProvenanceCheckError(
+      'M1 authority repair requires exactly 12 M1 protected outputs',
+    );
+  }
+  /** @type {(Record<string, any> & { path: string })[]} */
+  const expectedOutputs = baseM1.protectedOutputs.map(
+    (/** @type {Record<string, any>} */ output) => {
+      if (output.path === M1_AUTHORITY_REPAIR_PROMOTION_PATH) {
+        return {
+          ...output,
+          headSha256: M1_AUTHORITY_REPAIR_PROMOTION_SHA256,
+        };
+      }
+      const projectionSha256 = /** @type {Readonly<Record<string, string>>} */ (
+        M1_AUTHORITY_REPAIR_PROJECT_PROJECTIONS
+      )[output.path];
+      return projectionSha256 === undefined
+        ? output
+        : { ...output, projectionSha256 };
+    },
+  );
+  expectedOutputs.push(M1_AUTHORITY_REPAIR_SELECTION_OUTPUT);
+  expectedOutputs.sort((left, right) =>
+    left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+  );
+  if (
+    json(
+      headM1.protectedOutputs.map(
+        (/** @type {{ path: string }} */ output) => output.path,
+      ),
+    ) !== json(expectedOutputs.map((output) => output.path))
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      'M1 authority repair requires the exact M1 protected output paths and order',
+    );
+  }
+  for (const expectedOutput of expectedOutputs) {
+    const headOutput = headM1.protectedOutputs.find(
+      (/** @type {{ path: string }} */ output) =>
+        output.path === expectedOutput.path,
+    );
+    if (json(headOutput) === json(expectedOutput)) continue;
+    if (expectedOutput.path === M1_AUTHORITY_REPAIR_PROMOTION_PATH) {
+      throw new Es2015ProvenanceCheckError(
+        'M1 authority repair requires the exact corrected M1 promotion output',
+      );
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(
+        M1_AUTHORITY_REPAIR_PROJECT_PROJECTIONS,
+        expectedOutput.path,
+      )
+    ) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair requires the exact corrected M1 project output ${expectedOutput.path}`,
+      );
+    }
+    if (expectedOutput.path === ES5_SELECTION_FILE) {
+      throw new Es2015ProvenanceCheckError(
+        'M1 authority repair requires the exact M1 selection replacement output',
+      );
+    }
+    throw new Es2015ProvenanceCheckError(
+      `M1 authority repair must preserve M1 protected output ${expectedOutput.path}`,
+    );
+  }
+  return headM1;
+}
+
+/**
+ * @param {ReturnType<typeof parseEs2015ProvenanceManifest>} baseManifest
+ * @param {{ deps: ProvenanceCheckDependencies, base: string, head: string }} context
+ */
+export async function assertM1AuthorityRepairImmutableBytes(
+  baseManifest,
+  context,
+) {
+  if (context.deps.readGitMode === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      'M1 authority repair cannot attest immutable file modes',
+    );
+  }
+  const immutablePaths = new Set([
+    WORKFLOW_PATH,
+    'tools/ci/pipeline.js',
+    'tools/test262/es2015-policy.json',
+    FEATURES_FILE,
+    ...ES2015_PROVENANCE_DECISION_CODES.map(
+      (code) => `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+    ),
+    ...(baseManifest.roadmapAuthorities ?? []).flatMap(
+      (
+        /** @type {{ evidence: readonly { path: string }[], protectedOutputs: readonly { path: string }[] }} */ authority,
+      ) => [
+        ...authority.evidence.map((entry) => entry.path),
+        ...authority.protectedOutputs.map((entry) => entry.path),
+      ],
+    ),
+  ]);
+  for (const path of immutablePaths) {
+    const [baseText, headText, baseMode, headMode] = await Promise.all([
+      context.deps.readGitFile(context.base, path),
+      context.deps.readGitFile(context.head, path),
+      context.deps.readGitMode(context.base, path),
+      context.deps.readGitMode(context.head, path),
+    ]);
+    if (baseText === null || baseMode === null) {
+      if (
+        baseText !== null ||
+        baseMode !== null ||
+        headText !== null ||
+        headMode !== null
+      ) {
+        throw new Es2015ProvenanceCheckError(
+          `M1 authority repair immutable path ${path} must remain byte-identical between BASE and HEAD`,
+        );
+      }
+      continue;
+    }
+    if (headText === null || baseText !== headText) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair immutable path ${path} must remain byte-identical between BASE and HEAD`,
+      );
+    }
+    if (
+      headMode === null ||
+      !REGULAR_GIT_FILE_MODES.has(baseMode) ||
+      !REGULAR_GIT_FILE_MODES.has(headMode) ||
+      baseMode !== headMode
+    ) {
+      throw new Es2015ProvenanceCheckError(
+        `M1 authority repair immutable path ${path} must retain its exact regular-file mode between BASE and HEAD`,
+      );
+    }
   }
 }
 
@@ -2084,6 +2662,37 @@ function parseRoadmapAuditEvidenceDocument(text, label) {
   return { document, rawRecords, records };
 }
 
+/**
+ * @param {{
+ *   profile: string,
+ *   outputPath: string,
+ *   promotionByPath: ReadonlyMap<string, { features: readonly string[] }>,
+ *   records: readonly ReturnType<typeof createTestRecord>[],
+ * }} options
+ * @returns {ReturnType<typeof createTestRecord>[]}
+ */
+export function reconstructGenericPromotedAuditRecords(options) {
+  return options.records.map((record) => {
+    if (record.status !== 'passed') {
+      throw new Es2015ProvenanceCheckError(
+        `${options.profile} protected output ${options.outputPath} requires passing audit evidence for promoted path ${record.file}`,
+      );
+    }
+    const promotedEntry = options.promotionByPath.get(record.file);
+    if (promotedEntry === undefined) {
+      throw new Es2015ProvenanceCheckError(
+        `${options.profile} protected output ${options.outputPath} promotion metadata is missing ${record.file}`,
+      );
+    }
+    return createTestRecord({
+      file: record.file,
+      variant: record.variant,
+      status: record.status,
+      features: promotedEntry.features,
+    });
+  });
+}
+
 /** @param {readonly string[]} values @param {string} label */
 function assertSortedUniqueStrings(values, label) {
   const sorted = [...values].sort();
@@ -3190,23 +3799,18 @@ async function validateReportProjection(
       AUDIT_EVIDENCE_FILE,
       'HEAD',
     );
-    promotionRecords = parseRoadmapAuditEvidence(
-      auditEvidenceText,
-      AUDIT_EVIDENCE_FILE,
-    )
-      .filter((record) => promoted.has(record.file))
-      .map((record) => {
-        if (record.status !== 'passed') {
-          throw new Es2015ProvenanceCheckError(
-            `${profile} protected output ${output.path} requires passing audit evidence for promoted path ${record.file}`,
-          );
-        }
-        return createTestRecord({
-          file: record.file,
-          variant: record.variant,
-          status: record.status,
-        });
-      });
+    const promotionByPath = new Map(
+      promotion.entries.map((entry) => [entry.path, entry]),
+    );
+    promotionRecords = reconstructGenericPromotedAuditRecords({
+      profile,
+      outputPath: output.path,
+      promotionByPath,
+      records: parseRoadmapAuditEvidence(
+        auditEvidenceText,
+        AUDIT_EVIDENCE_FILE,
+      ).filter((record) => promoted.has(record.file)),
+    });
   }
   const expectedRecords = orderReportRecords(
     selectedPaths,
@@ -3997,6 +4601,27 @@ function parseH0BootstrapRepairMarker(text) {
   };
 }
 
+/** @param {string} text @returns {M1AuthorityRepairMarker} */
+export function parseM1AuthorityRepairMarker(text) {
+  const match = m1AuthorityRepairMarkerPattern().exec(text);
+  if (match === null) {
+    throw new Es2015ProvenanceCheckError(
+      'M1 authority repair marker is not authoritative',
+    );
+  }
+  return {
+    kind: 'm1-authority-repair',
+    text,
+    code: 'M1',
+    issue: 80,
+    base: match[1],
+    baseManifestSha256: match[2],
+    baseRecordSha256: match[3],
+    headManifestSha256: match[4],
+    headRecordSha256: match[5],
+  };
+}
+
 /** @param {string} text @returns {RoadmapMarker} */
 export function parseRoadmapAuthorityMarker(text) {
   /** @type {readonly ((candidate: string) => RoadmapMarker | null)[]} */
@@ -4052,8 +4677,8 @@ export function parseRoadmapAuthorityMarker(text) {
   );
 }
 
-/** @param {string} body @param {boolean} includeH0BootstrapRepair */
-function authoritativeRangeMarkers(body, includeH0BootstrapRepair) {
+/** @param {string} body @param {boolean} includeOrdinaryPullRequestRepairs */
+function authoritativeRangeMarkers(body, includeOrdinaryPullRequestRepairs) {
   const markers = [];
   for (const match of body.matchAll(
     /(^|\n)(<!-- es2015-provenance-pr parent:T1 parent-issue:75 profile:[A-Za-z0-9:-]+ base-ledger-sha256:[0-9a-f]{64} -->)(?=\n|$)/gu,
@@ -4063,11 +4688,17 @@ function authoritativeRangeMarkers(body, includeH0BootstrapRepair) {
       marker: parseProvenanceRangeMarker(match[2]),
     });
   }
-  if (includeH0BootstrapRepair) {
+  if (includeOrdinaryPullRequestRepairs) {
     for (const match of body.matchAll(h0BootstrapRepairBodyPattern())) {
       markers.push({
         index: match.index ?? 0,
         marker: parseH0BootstrapRepairMarker(match[2]),
+      });
+    }
+    for (const match of body.matchAll(m1AuthorityRepairBodyPattern())) {
+      markers.push({
+        index: match.index ?? 0,
+        marker: parseM1AuthorityRepairMarker(match[2]),
       });
     }
   }
@@ -4094,6 +4725,14 @@ function h0BootstrapRepairMarkerPattern() {
 
 function h0BootstrapRepairBodyPattern() {
   return /(^|\n)(<!-- es2015-h0-bootstrap-repair base:[0-9a-f]{40} base-manifest-sha256:[0-9a-f]{64} -->)(?=\n|$)/gu;
+}
+
+function m1AuthorityRepairMarkerPattern() {
+  return /^<!-- es2015-m1-authority-repair\nparent:70\ncode:M1\nissue:80\nbase:([0-9a-f]{40})\nbase-manifest-sha256:([0-9a-f]{64})\nbase-record-sha256:([0-9a-f]{64})\nhead-manifest-sha256:([0-9a-f]{64})\nhead-record-sha256:([0-9a-f]{64})\n-->$/u;
+}
+
+function m1AuthorityRepairBodyPattern() {
+  return /(^|\n)(<!-- es2015-m1-authority-repair\nparent:70\ncode:M1\nissue:80\nbase:[0-9a-f]{40}\nbase-manifest-sha256:[0-9a-f]{64}\nbase-record-sha256:[0-9a-f]{64}\nhead-manifest-sha256:[0-9a-f]{64}\nhead-record-sha256:[0-9a-f]{64}\n-->)(?=\n|$)/gu;
 }
 
 function roadmapMigrationMarkerPattern() {

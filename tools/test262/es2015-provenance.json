@@ -14997,7 +14997,7 @@
         },
         {
           "path": "tools/test262/es2015-m1-promotion.json",
-          "sha256": "e123e6004eb71e9f3c012432af514e2f5385f049c3b0b0792c6c84f6d8f99cd6"
+          "sha256": "31f807a05d56d35762cd5457f779624df04f11ef482b3d1bcb60be3a06883c69"
         }
       ],
       "protectedOutputs": [
@@ -15006,14 +15006,14 @@
           "operation": "project",
           "baseSha256": "b334793aba47b475dd0f8090e6da9f73c0b2b0c75964e5562995f6deb144a7c2",
           "headSha256": null,
-          "projectionSha256": "d00433813b4b90005ea5b563c79f41af8f05d6ec4f87e8617c04a1ab4ba47a99"
+          "projectionSha256": "79a033c365600cceb1f337bcc680bfdd76b095be0a6b5fb64db604c784cce65b"
         },
         {
           "path": "docs/test262-report.jsonl",
           "operation": "project",
           "baseSha256": "21db3f9e84a17c79389945b879a6359b8a661a35a8b06a947322f53e2b6440cd",
           "headSha256": null,
-          "projectionSha256": "ce81820dfe5a47bf54aa965d2f3d9241375b02914e038b0c111d0e3178f917da"
+          "projectionSha256": "b1968f16a04240ce1169430f695f01a4ee013fdbf2ba3dcdd38b4ccabdcc225f"
         },
         {
           "path": "tools/test262/es2015-audit-evidence.json",
@@ -15061,7 +15061,7 @@
           "path": "tools/test262/es2015-m1-promotion.json",
           "operation": "add-exact",
           "baseSha256": null,
-          "headSha256": "e123e6004eb71e9f3c012432af514e2f5385f049c3b0b0792c6c84f6d8f99cd6",
+          "headSha256": "31f807a05d56d35762cd5457f779624df04f11ef482b3d1bcb60be3a06883c69",
           "projectionSha256": null
         },
         {
@@ -15069,14 +15069,21 @@
           "operation": "project",
           "baseSha256": "7d366c58f83e635cfe92993f67bab9d6e4d7ef49184cdc7b85b96180cdaf89a4",
           "headSha256": null,
-          "projectionSha256": "732939567e7271d02f6cb5f1248e818ed43823609f9cd66fd9c6b5ef93039912"
+          "projectionSha256": "a7b4dbd0334bd5ca34a25c80b156a051c444c989d8b87ba6ae18d34a7ca0078c"
+        },
+        {
+          "path": "tools/test262/es5-selection.json",
+          "operation": "replace-exact",
+          "baseSha256": "533e0b9fc165a026d64c4e64d783cf2585de7236600acacf228f06d27f23d8c8",
+          "headSha256": "78ac694beb258be0b67c7788137c736b0b30cf7457e3a903d364d38c038b48df",
+          "projectionSha256": null
         },
         {
           "path": "tools/test262/upstream-subset.json",
           "operation": "project",
           "baseSha256": "f7840957b181a3497eb3bb0eac349f08e54b7dd075276088652295fba1778a2b",
           "headSha256": null,
-          "projectionSha256": "2df51a8d8d51aa6c4ad44bcc234b7d9b2b8c7287b5189797f91c9ea8881e9e37"
+          "projectionSha256": "bd59cfd5496a3c180a99240b6611d1efe0141b931c63d13fd897dc0c1b25cdf3"
         }
       ],
       "destinations": [
