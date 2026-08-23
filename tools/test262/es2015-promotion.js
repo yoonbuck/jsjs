@@ -870,6 +870,18 @@ export function promotionPaths(manifest) {
 }
 
 /**
+ * @param {ReturnType<typeof parseEs2015Promotion>} promotion
+ * @returns {(file: string) => readonly string[] | undefined}
+ */
+export function createPromotionReportFeaturesForPath(promotion) {
+  const featuresByPath = new Map(
+    promotion.entries.map((entry) => [entry.path, entry.features]),
+  );
+
+  return (file) => featuresByPath.get(file);
+}
+
+/**
  * Validates the live root facts against the immutable manifest and returns only
  * the dependencies authorized for this exact promoted root. A non-promoted
  * root receives no additional support.

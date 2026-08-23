@@ -21,6 +21,7 @@ import {
   buildEs2015Promotion,
   createEs2015PromotionAuthorization,
   createEs2015PromotionAuthorizations,
+  createPromotionReportFeaturesForPath,
   Es2015PromotionError,
   mergePromotionSubset,
   mergePromotionSubsets,
@@ -44,7 +45,6 @@ import {
   parseUpstreamSubset,
   upstreamSubsetPaths,
 } from '../../tools/test262/upstream.js';
-import * as upstreamRunModule from '../../tools/test262/upstream-run.js';
 
 const { structuredClone } = globalThis;
 const EXCLUDED_PATH = 'test/staging/not-read.js';
@@ -1610,8 +1610,7 @@ export default [
   {
     name: 'upstream report feature authority is scoped to exact M1 roots',
     run: async () => {
-      const createReportFeatures =
-        upstreamRunModule.createPromotionReportFeaturesForPath;
+      const createReportFeatures = createPromotionReportFeaturesForPath;
       assertSame(typeof createReportFeatures, 'function');
       if (typeof createReportFeatures !== 'function') return;
       const [

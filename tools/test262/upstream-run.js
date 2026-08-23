@@ -44,6 +44,7 @@ import {
 import { createJsjsTest262Engine } from './engine.js';
 import {
   ES2015_H0_PROMOTION_FILE,
+  createPromotionReportFeaturesForPath,
   createEs2015PromotionAuthorizations,
   ES2015_PROMOTION_FILE,
   parseEs2015Promotion,
@@ -161,18 +162,6 @@ async function readOptionalPromotion(path, readPromotion) {
     }
     throw error;
   }
-}
-
-/**
- * @param {ReturnType<typeof parseEs2015Promotion>} promotion
- * @returns {(file: string) => readonly string[] | undefined}
- */
-export function createPromotionReportFeaturesForPath(promotion) {
-  const featuresByPath = new Map(
-    promotion.entries.map((entry) => [entry.path, entry.features]),
-  );
-
-  return (file) => featuresByPath.get(file);
 }
 
 /**
