@@ -1171,7 +1171,7 @@ export default [
             path: m1Path,
             variants: 2,
             features: ['m1-feature'],
-            includeFeatures: [],
+            includeFeatures: ['m1-include-feature'],
           },
         ],
       });
@@ -1201,12 +1201,12 @@ export default [
           path: m1Path,
           variants: 2,
           metadata: { features: ['m1-feature'] },
-          includeFeatures: [],
+          includeFeatures: ['m1-include-feature'],
         },
       ];
       const policy = {
         es2015Features: ['cross-realm', 'exact-path-feature', 'm1-feature'],
-        neutralFeatures: ['include-path-feature'],
+        neutralFeatures: ['include-path-feature', 'm1-include-feature'],
         laterFeatures: ['later-path-feature'],
       };
       const h0Authorization = createEs2015PromotionAuthorization({
@@ -1254,7 +1254,7 @@ export default [
       );
       assertSame(
         JSON.stringify(authorizations(m1Path, { features: ['m1-feature'] })),
-        '["m1-feature"]',
+        '["m1-feature","m1-include-feature"]',
       );
       assertSame(
         JSON.stringify(

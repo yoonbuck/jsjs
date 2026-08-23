@@ -3951,8 +3951,17 @@ export default [
 
       assertSame(forbiddenModules.join('\n'), '');
       assertSame(forbiddenCalls.join('\n'), '');
+      assertSame(closure.has('tools/test262/harness-definitions.js'), true);
       assertSame(source.includes('runTest262Suite({'), true);
       assertSame(source.includes('verifyM1Ledger('), true);
+      assertSame(source.includes('buildEs2015Inventory({'), true);
+      assertSame(source.includes('readTest262HarnessDefinitions('), true);
+      assertSame(
+        (await readSource('tools/test262/features.json')).includes(
+          '"Reflect.construct"',
+        ),
+        false,
+      );
     },
   },
   {

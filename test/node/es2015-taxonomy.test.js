@@ -322,7 +322,7 @@ const AUDIT_M1_PROMOTION = JSON.stringify({
       path: AUDIT_M1_PATH,
       variants: 2,
       features: ['m1-feature'],
-      includeFeatures: [],
+      includeFeatures: ['m1-include-feature'],
     },
   ],
 });
@@ -859,6 +859,7 @@ function fixtureAuditDependencies(fixture, options = {}) {
  *   readDecisionFragments?: () => Promise<ReadonlyMap<string, string>>,
  *   subset?: string,
  *   promotion?: string,
+ *   includeDefinitions?: ReadonlyMap<string, unknown>,
  *   pathFiles?: ReadonlyMap<string, string>,
  *   runPromotion?: (options: {
  *     paths: readonly string[],
@@ -949,7 +950,7 @@ function auditDependencies(options = {}) {
       }
       return value;
     },
-    readIncludeDefinitions: async () => new Map(),
+    readIncludeDefinitions: async () => options.includeDefinitions ?? new Map(),
     readProvenanceManifest:
       options.readProvenanceManifest ??
       (async () => {
@@ -1036,6 +1037,90 @@ function fixtureOutput(dependencies, path) {
 }
 
 export default [
+  {
+    name: 'contained harness definitions preserve aliases, recursion, sorting, and diagnostics',
+    run: async () => {
+      const root = new URL(
+        `.harness-definitions-${randomUUID()}/`,
+        import.meta.url,
+      );
+      const harness = new URL('vendor/test262/harness/', root);
+      await mkdir(new URL('nested/', harness), { recursive: true });
+      await Promise.all([
+        writeFile(new URL('propertyHelper.js', harness), '', 'utf8'),
+        writeFile(new URL('nested/helper.js', harness), '', 'utf8'),
+        writeFile(
+          new URL('features.yml', harness),
+          [
+            'propertyHelper.js:',
+            '  features: [z-feature, a-feature]',
+            '  includes: [nested/helper.js]',
+            'nested/helper: [nested-feature]',
+            '',
+          ].join('\n'),
+          'utf8',
+        ),
+      ]);
+      try {
+        const { readTest262HarnessDefinitions } =
+          await import('../../tools/test262/harness-definitions.js');
+        const definitions = await readTest262HarnessDefinitions(
+          'vendor/test262',
+          root,
+        );
+        assertSame(
+          definitions.get('propertyHelper'),
+          definitions.get('propertyHelper.js'),
+        );
+        assertSame(
+          definitions.get('nested/helper'),
+          definitions.get('nested/helper.js'),
+        );
+        assertSame(
+          JSON.stringify(definitions.get('propertyHelper.js')),
+          '{"features":["a-feature","z-feature"],"includes":["nested/helper.js"]}',
+        );
+        assertSame(
+          JSON.stringify(definitions.get('nested/helper.js')),
+          '{"features":["nested-feature"],"includes":[]}',
+        );
+
+        await writeFile(
+          new URL('features.yml', harness),
+          'missing.js: []\n',
+          'utf8',
+        );
+        let missing = '';
+        try {
+          await readTest262HarnessDefinitions('vendor/test262', root);
+        } catch (error) {
+          missing = error instanceof Error ? error.message : String(error);
+        }
+        assertSame(
+          missing,
+          'vendor/test262/harness/features.yml names missing include missing.js',
+        );
+
+        await writeFile(
+          new URL('features.yml', harness),
+          'propertyHelper: []\npropertyHelper.js: []\n',
+          'utf8',
+        );
+        let duplicate = '';
+        try {
+          await readTest262HarnessDefinitions('vendor/test262', root);
+        } catch (error) {
+          duplicate = error instanceof Error ? error.message : String(error);
+        }
+        assertSame(
+          duplicate,
+          'vendor/test262/harness/features.yml repeats include alias propertyHelper.js',
+        );
+      } finally {
+        await rm(root, { force: true, recursive: true });
+      }
+    },
+  },
   {
     name: 'ES2015 audit rejects non-UTC, pin, source, and inventory drift',
     run: async () => {
@@ -2559,7 +2644,7 @@ export default [
       const roots = new Map(AUDIT_ROOTS);
       roots.set(
         AUDIT_M1_PATH,
-        '/*---\ndescription: M1 promotion fixture.\nes6id: 26.1\nfeatures: [m1-feature]\n---*/\n',
+        '/*---\ndescription: M1 promotion fixture.\nes6id: 26.1\nfeatures: [m1-feature]\nincludes: [m1Helper.js]\n---*/\n',
       );
       const dependencies = auditDependencies({
         roots,
@@ -2568,12 +2653,16 @@ export default [
         auditEvidence: auditEvidence({
           auditRecords: [...AUDIT_RECORDS, ...AUDIT_M1_RECORDS],
         }),
+        includeDefinitions: new Map([
+          ['m1Helper.js', { features: ['m1-include-feature'], includes: [] }],
+        ]),
         files: new Map([
           [
             'tools/test262/es2015-policy.json',
             JSON.stringify({
               ...JSON.parse(POLICY),
               es2015Features: ['let', 'm1-feature'],
+              neutralFeatures: ['cross-realm', 'm1-include-feature'],
             }),
           ],
           ['tools/test262/es2015-m1-promotion.json', AUDIT_M1_PROMOTION],

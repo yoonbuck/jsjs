@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { assertSame, assertThrows } from '../harness/assert.js';
+import * as m1Module from '../../tools/test262/es2015-m1.js';
 import {
   M1,
   M1_PROMOTION_GROUP,
@@ -13,9 +15,39 @@ import {
   main as runM1Command,
   verifyM1Ledger,
 } from '../../tools/test262/es2015-m1.js';
+import { parseEs2015Promotion } from '../../tools/test262/es2015-promotion.js';
+import { buildEs2015Inventory } from '../../tools/test262/es2015-taxonomy.js';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
 const { structuredClone } = globalThis;
+const M1_CONSTRUCTOR_INCLUDE_PATHS = Object.freeze([
+  'test/built-ins/Reflect/apply/not-a-constructor.js',
+  'test/built-ins/Reflect/construct/not-a-constructor.js',
+  'test/built-ins/Reflect/defineProperty/not-a-constructor.js',
+  'test/built-ins/Reflect/deleteProperty/not-a-constructor.js',
+  'test/built-ins/Reflect/get/not-a-constructor.js',
+  'test/built-ins/Reflect/getOwnPropertyDescriptor/not-a-constructor.js',
+  'test/built-ins/Reflect/getPrototypeOf/not-a-constructor.js',
+  'test/built-ins/Reflect/has/not-a-constructor.js',
+  'test/built-ins/Reflect/isExtensible/not-a-constructor.js',
+  'test/built-ins/Reflect/preventExtensions/not-a-constructor.js',
+  'test/built-ins/Reflect/set/not-a-constructor.js',
+  'test/built-ins/Reflect/setPrototypeOf/not-a-constructor.js',
+]);
+const M1_STALE_EXCLUSION_PATHS = Object.freeze([
+  'test/built-ins/Object/internals/DefineOwnProperty/consistent-value-function-arguments.js',
+  'test/built-ins/Object/internals/DefineOwnProperty/consistent-value-function-caller.js',
+  'test/built-ins/Object/internals/DefineOwnProperty/consistent-value-regexp-dollar1.js',
+  'test/built-ins/Object/internals/DefineOwnProperty/consistent-writable-regexp-dollar1.js',
+  'test/staging/sm/Array/unshift-with-enumeration.js',
+  'test/staging/sm/object/bug-1206700.js',
+  'test/staging/sm/strict/primitive-assignment.js',
+]);
+
+/** @param {string} text */
+function sha256(text) {
+  return createHash('sha256').update(text).digest('hex');
+}
 
 async function readM1Inputs() {
   const [ledgerText, taxonomyText] = await Promise.all([
@@ -31,6 +63,64 @@ async function readM1Inputs() {
   return { ledgerText, taxonomy: JSON.parse(taxonomyText) };
 }
 
+/**
+ * @param {string} ledgerText
+ * @param {any} taxonomy
+ */
+function syntheticM1Inventory(ledgerText, taxonomy) {
+  const paths = ledgerText.trimEnd().split('\n');
+  const byPath = new Map(
+    taxonomy.classifications.map((/** @type {any} */ entry) => [
+      entry.path,
+      entry,
+    ]),
+  );
+  return buildEs2015Inventory({
+    roots: paths.map((path) => {
+      const entry = byPath.get(path);
+      if (entry === undefined) {
+        throw new Error(`missing M1 inventory fixture: ${path}`);
+      }
+      return {
+        path,
+        metadata: {
+          features: entry.features,
+          flags: entry.flags,
+          includes: entry.includes,
+        },
+      };
+    }),
+    includeDefinitions: syntheticM1IncludeDefinitions(),
+  });
+}
+
+/** @param {string} path @param {any} taxonomy */
+function syntheticM1Source(path, taxonomy) {
+  const entry = taxonomy.classifications.find(
+    (/** @type {any} */ candidate) => candidate.path === path,
+  );
+  if (entry === undefined) {
+    throw new Error(`missing M1 source fixture: ${path}`);
+  }
+  return [
+    '/*---',
+    'description: focused M1 inventory fixture',
+    `features: ${JSON.stringify(entry.features)}`,
+    `flags: ${JSON.stringify(entry.flags)}`,
+    `includes: ${JSON.stringify(entry.includes)}`,
+    '---*/',
+    '',
+  ].join('\n');
+}
+
+function syntheticM1IncludeDefinitions() {
+  return new Map([
+    ['compareArray.js', { features: [], includes: [] }],
+    ['isConstructor.js', { features: ['Reflect.construct'], includes: [] }],
+    ['propertyHelper.js', { features: [], includes: [] }],
+  ]);
+}
+
 async function readM1ProjectionInputs() {
   const [
     ledgerText,
@@ -40,6 +130,7 @@ async function readM1ProjectionInputs() {
     reportText,
     conformanceText,
     featuresText,
+    selectionText,
   ] = await Promise.all(
     [
       'tools/test262/es2015-m1-paths.txt',
@@ -49,6 +140,7 @@ async function readM1ProjectionInputs() {
       'docs/test262-report.jsonl',
       'docs/conformance.md',
       'tools/test262/features.json',
+      'tools/test262/es5-selection.json',
     ].map((file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8')),
   );
   return {
@@ -59,6 +151,7 @@ async function readM1ProjectionInputs() {
     reportText,
     conformanceText,
     featuresText,
+    selectionText,
   };
 }
 
@@ -353,10 +446,12 @@ export default [
     run: async () => {
       const { ledgerText, taxonomy } = await readM1Inputs();
       const taxonomyText = `${JSON.stringify(taxonomy, null, 2)}\n`;
+      const inventory = syntheticM1Inventory(ledgerText, taxonomy);
       const evidence = buildM1AuthorityEvidence({
         ledgerText,
         taxonomyText,
         execution: syntheticM1Execution(ledgerText, taxonomy),
+        inventory,
       });
 
       assertSame(evidence.paths.length, 113);
@@ -371,6 +466,69 @@ export default [
       assertSame(evidence.promotion.groupName, 'es2015/m1-reflect');
       assertSame(evidence.promotion.rootCount, 103);
       assertSame(evidence.promotion.variantCount, 206);
+      assertSame(
+        evidence.promotion.entries.filter(
+          (entry) => entry.includeFeatures.length > 0,
+        ).length,
+        12,
+      );
+      assertSame(
+        evidence.promotion.entries.every((entry) =>
+          M1_CONSTRUCTOR_INCLUDE_PATHS.includes(entry.path)
+            ? JSON.stringify(entry.includeFeatures) === '["Reflect.construct"]'
+            : entry.includeFeatures.length === 0,
+        ),
+        true,
+      );
+      assertSame(
+        JSON.stringify(m1Module.M1_CONSTRUCTOR_INCLUDE_PATHS),
+        JSON.stringify(M1_CONSTRUCTOR_INCLUDE_PATHS),
+      );
+      assertSame(
+        parseEs2015Promotion(JSON.stringify(evidence.promotion)).entries.length,
+        103,
+      );
+      assertSame(
+        sha256(`${JSON.stringify(evidence.promotion, null, 2)}\n`),
+        '31f807a05d56d35762cd5457f779624df04f11ef482b3d1bcb60be3a06883c69',
+      );
+    },
+  },
+  {
+    name: 'M1 authority evidence rejects pinned inventory drift',
+    run: async () => {
+      const { ledgerText, taxonomy } = await readM1Inputs();
+      const taxonomyText = `${JSON.stringify(taxonomy, null, 2)}\n`;
+      const execution = syntheticM1Execution(ledgerText, taxonomy);
+      const inventory = syntheticM1Inventory(ledgerText, taxonomy);
+      const drifted = /** @type {any[]} */ (structuredClone(inventory));
+      const constructorRoot = drifted.find(
+        (/** @type {any} */ entry) =>
+          entry.path === M1_CONSTRUCTOR_INCLUDE_PATHS[0],
+      );
+      if (constructorRoot === undefined) {
+        throw new Error('missing M1 constructor inventory fixture');
+      }
+      if (constructorRoot.metadata === null) {
+        throw new Error('missing M1 constructor metadata fixture');
+      }
+      constructorRoot.metadata.features = [];
+
+      assertSame(
+        assertThrows(
+          () =>
+            buildM1AuthorityEvidence({
+              ledgerText,
+              taxonomyText,
+              execution,
+              inventory: drifted,
+            }),
+          Error,
+        ).message.includes(
+          `M1 pinned inventory drift: ${constructorRoot.path}`,
+        ),
+        true,
+      );
     },
   },
   {
@@ -379,6 +537,7 @@ export default [
       const { ledgerText, taxonomy } = await readM1Inputs();
       const taxonomyText = `${JSON.stringify(taxonomy, null, 2)}\n`;
       const baselineExecution = syntheticM1Execution(ledgerText, taxonomy);
+      const inventory = syntheticM1Inventory(ledgerText, taxonomy);
       const expectRejected = (/** @type {any} */ execution) =>
         assertThrows(
           () =>
@@ -386,6 +545,7 @@ export default [
               ledgerText,
               taxonomyText,
               execution,
+              inventory,
             }),
           Error,
         );
@@ -473,6 +633,7 @@ export default [
               ledgerText,
               taxonomyText,
               execution: baselineExecution,
+              inventory,
               disposition: wrongDisposition,
             }),
           Error,
@@ -487,20 +648,24 @@ export default [
       const inputs = await readM1ProjectionInputs();
       const taxonomy = JSON.parse(inputs.taxonomyText);
       const execution = syntheticM1Execution(inputs.ledgerText, taxonomy);
+      const inventory = syntheticM1Inventory(inputs.ledgerText, taxonomy);
       const evidence = buildM1AuthorityEvidence({
         ledgerText: inputs.ledgerText,
         taxonomyText: inputs.taxonomyText,
         execution,
+        inventory,
       });
       const projected = projectM1CoreOutputs({
         ...inputs,
         evidence,
         execution,
+        inventory,
       });
       const repeated = projectM1CoreOutputs({
         ...inputs,
         evidence,
         execution,
+        inventory,
       });
 
       assertSame(
@@ -596,6 +761,33 @@ export default [
       );
       assertSame(groups.length, 1);
       assertSame(groups[0].paths.length, 103);
+      assertSame(subset.groups.length, 61);
+      assertSame(
+        new Set(
+          subset.groups.flatMap((/** @type {any} */ group) => group.paths),
+        ).size,
+        20595,
+      );
+      assertSame(
+        sha256(projected.subsetText),
+        '9f768aa8fb0c473e98fe2156d290c4207cea797302cccad6f9b1b922a36b37c0',
+      );
+      assertSame(
+        sha256(projected.taxonomyText),
+        'fba700539b05edd67b6cf67e4c0a1361398a2d0f04212bc7080a83f44abf577a',
+      );
+      assertSame(
+        sha256(projected.auditEvidenceText),
+        'eabaeb8245a6988443d91b21219c9e7919ec22639d6e8515a8dadbe5ddfc217f',
+      );
+      assertSame(
+        sha256(projected.reportText),
+        'ead91d3f6c0f23f8cfbe839bef3e371539e5f8fa590b9b351570714ce740e5c8',
+      );
+      assertSame(
+        sha256(projected.conformanceText),
+        '61ed7a18ff9d77c9b0b3e5d4c598ce30e998d633be88bb1bc101c650aee65169',
+      );
 
       const reportRecords = projected.reportText
         .trimEnd()
@@ -643,21 +835,71 @@ export default [
     },
   },
   {
+    name: 'M1 selection projection removes exactly seven stale exclusions',
+    run: async () => {
+      const { selectionText } = await readM1ProjectionInputs();
+      const projectM1Selection = m1Module.projectM1Selection;
+      assertSame(typeof projectM1Selection, 'function');
+      if (typeof projectM1Selection !== 'function') return;
+      const projection = projectM1Selection(selectionText);
+      const base = JSON.parse(projection.baseText);
+      const head = JSON.parse(projection.headText);
+      const removed = base.exclusions.filter((/** @type {any} */ entry) =>
+        M1_STALE_EXCLUSION_PATHS.includes(entry.path),
+      );
+      const expected = {
+        ...base,
+        exclusions: base.exclusions.filter(
+          (/** @type {any} */ entry) =>
+            !M1_STALE_EXCLUSION_PATHS.includes(entry.path),
+        ),
+      };
+
+      assertSame(projection.baseText, selectionText);
+      assertSame(removed.length, 7);
+      assertSame(
+        JSON.stringify(removed.map((/** @type {any} */ entry) => entry.path)),
+        JSON.stringify(M1_STALE_EXCLUSION_PATHS),
+      );
+      assertSame(JSON.stringify(head), JSON.stringify(expected));
+      assertSame(
+        JSON.stringify(m1Module.M1_STALE_EXCLUSION_PATHS),
+        JSON.stringify(M1_STALE_EXCLUSION_PATHS),
+      );
+      assertSame(
+        sha256(projection.baseText),
+        '533e0b9fc165a026d64c4e64d783cf2585de7236600acacf228f06d27f23d8c8',
+      );
+      assertSame(
+        sha256(projection.headText),
+        '78ac694beb258be0b67c7788137c736b0b30cf7457e3a903d364d38c038b48df',
+      );
+    },
+  },
+  {
     name: 'M1 pending authority pins six evidence files and closed projections',
     run: async () => {
       const inputs = await readM1ProjectionInputs();
       const taxonomy = JSON.parse(inputs.taxonomyText);
       const execution = syntheticM1Execution(inputs.ledgerText, taxonomy);
+      const inventory = syntheticM1Inventory(inputs.ledgerText, taxonomy);
       const evidence = buildM1AuthorityEvidence({
         ledgerText: inputs.ledgerText,
         taxonomyText: inputs.taxonomyText,
         execution,
+        inventory,
       });
       const projected = projectM1CoreOutputs({
         ...inputs,
         evidence,
         execution,
+        inventory,
       });
+      const projectM1Selection = m1Module.projectM1Selection;
+      if (typeof projectM1Selection !== 'function') {
+        throw new Error('M1 selection projection is unavailable');
+      }
+      const selection = projectM1Selection(inputs.selectionText);
       const render = (/** @type {unknown} */ value) =>
         `${JSON.stringify(value, null, 2)}\n`;
       const authority = buildM1PendingAuthority({
@@ -679,6 +921,7 @@ export default [
           'docs/test262-report.jsonl': inputs.reportText,
           'tools/test262/es2015-audit-evidence.json': inputs.auditEvidenceText,
           'tools/test262/es2015-taxonomy.json': inputs.taxonomyText,
+          'tools/test262/es5-selection.json': selection.baseText,
           'tools/test262/upstream-subset.json': inputs.subsetText,
         },
         projectedOutputs: {
@@ -687,6 +930,7 @@ export default [
           'tools/test262/es2015-audit-evidence.json':
             projected.auditEvidenceText,
           'tools/test262/es2015-taxonomy.json': projected.taxonomyText,
+          'tools/test262/es5-selection.json': selection.headText,
           'tools/test262/upstream-subset.json': projected.subsetText,
         },
       });
@@ -704,7 +948,7 @@ export default [
       assertSame(authority.source.entryLedgerSha256, null);
       assertSame(authority.reconciliation, null);
       assertSame(authority.evidence.length, 6);
-      assertSame(authority.protectedOutputs.length, 11);
+      assertSame(authority.protectedOutputs.length, 12);
       assertSame(
         authority.protectedOutputs.filter(
           (/** @type {any} */ output) => output.operation === 'add-exact',
@@ -715,7 +959,7 @@ export default [
         authority.protectedOutputs.filter(
           (/** @type {any} */ output) => output.operation === 'replace-exact',
         ).length,
-        1,
+        2,
       );
       assertSame(
         authority.protectedOutputs.filter(
@@ -731,6 +975,52 @@ export default [
         ),
         true,
       );
+      const selectionOutput = authority.protectedOutputs.find(
+        (/** @type {any} */ output) =>
+          output.path === 'tools/test262/es5-selection.json',
+      );
+      assertSame(
+        JSON.stringify(selectionOutput),
+        JSON.stringify({
+          path: 'tools/test262/es5-selection.json',
+          operation: 'replace-exact',
+          baseSha256:
+            '533e0b9fc165a026d64c4e64d783cf2585de7236600acacf228f06d27f23d8c8',
+          headSha256:
+            '78ac694beb258be0b67c7788137c736b0b30cf7457e3a903d364d38c038b48df',
+          projectionSha256: null,
+        }),
+      );
+      assertSame(
+        sha256(`${JSON.stringify(authority)}\n`),
+        '42f7193e216332d40b3c852ae3a4d96aa5c24c29533c8cf344ced59b5b207670',
+      );
+      assertSame(
+        sha256(render(authority)),
+        '08bee7fc33f94ce6eaa5527aa5e6ee5c90432fd4cce364e853d1cf1bfe1bf570',
+      );
+      const protectedProjection = authority.protectedOutputs.map((output) => ({
+        path: output.path,
+        operation: output.operation,
+        sha256:
+          output.operation === 'project'
+            ? output.projectionSha256
+            : output.headSha256,
+      }));
+      assertSame(
+        sha256(`${JSON.stringify(protectedProjection)}\n`),
+        '22bf654462044eb3febfbcec43e1c56a20cd89392c763e8d141fd6f3274289ed',
+      );
+      const manifest = JSON.parse(
+        await readFile(
+          new URL('tools/test262/es2015-provenance.json', REPOSITORY_ROOT),
+          'utf8',
+        ),
+      );
+      const repaired = manifest.roadmapAuthorities.find(
+        (/** @type {any} */ entry) => entry.code === 'M1',
+      );
+      assertSame(JSON.stringify(authority), JSON.stringify(repaired));
       assertSame(
         JSON.stringify(authority.destinations),
         JSON.stringify([
@@ -752,6 +1042,8 @@ export default [
     name: 'M1 build-scratch mode writes only the complete ignored bundle',
     run: async () => {
       const { ledgerText, taxonomy } = await readM1Inputs();
+      /** @type {string[]} */
+      const readPaths = [];
       const executionPath =
         '.superpowers/issue-80/m1/unit-build-execution.json';
       await writeFile(
@@ -772,10 +1064,27 @@ export default [
               `--execution=${executionPath}`,
               '--output=.superpowers/issue-80/m1',
             ],
-            { environment: { TZ: 'UTC' } },
+            {
+              environment: { TZ: 'UTC' },
+              readPin: async () => ({
+                ...taxonomy.pin,
+                checkoutPath: 'vendor/test262',
+              }),
+              assertPinnedCheckout: async (pin) => {
+                assertSame(pin.repository, taxonomy.pin.repository);
+                assertSame(pin.revision, taxonomy.pin.revision);
+              },
+              readRoot: async (path) => {
+                readPaths.push(path);
+                return syntheticM1Source(path, taxonomy);
+              },
+              readIncludeDefinitions: async () =>
+                syntheticM1IncludeDefinitions(),
+            },
           ),
           0,
         );
+        assertSame(readPaths.join('\n'), ledgerText.trimEnd());
         const expected = [
           '.superpowers/issue-80/m1/evidence/es2015-m1-paths.json',
           '.superpowers/issue-80/m1/evidence/es2015-m1-baseline.json',
@@ -787,6 +1096,7 @@ export default [
           '.superpowers/issue-80/m1/projected/docs/test262-report.jsonl',
           '.superpowers/issue-80/m1/projected/tools/test262/es2015-audit-evidence.json',
           '.superpowers/issue-80/m1/projected/tools/test262/es2015-taxonomy.json',
+          '.superpowers/issue-80/m1/projected/tools/test262/es5-selection.json',
           '.superpowers/issue-80/m1/projected/tools/test262/upstream-subset.json',
           '.superpowers/issue-80/m1/authority-record.json',
           '.superpowers/issue-80/m1/protected-projection.json',
@@ -808,6 +1118,26 @@ export default [
         assertSame(summary.outcome.completePassVariants, 206);
         assertSame(summary.outcome.residualRoots, 10);
         assertSame(summary.outcome.residualVariants, 20);
+        assertSame(
+          summary.authoritySha256,
+          '42f7193e216332d40b3c852ae3a4d96aa5c24c29533c8cf344ced59b5b207670',
+        );
+        assertSame(
+          summary.protectedProjectionSha256,
+          '22bf654462044eb3febfbcec43e1c56a20cd89392c763e8d141fd6f3274289ed',
+        );
+        assertSame(
+          summary.fileSha256['evidence/es2015-m1-promotion.json'],
+          '31f807a05d56d35762cd5457f779624df04f11ef482b3d1bcb60be3a06883c69',
+        );
+        assertSame(
+          summary.fileSha256['projected/tools/test262/es2015-taxonomy.json'],
+          'fba700539b05edd67b6cf67e4c0a1361398a2d0f04212bc7080a83f44abf577a',
+        );
+        assertSame(
+          summary.fileSha256['projected/tools/test262/es5-selection.json'],
+          '78ac694beb258be0b67c7788137c736b0b30cf7457e3a903d364d38c038b48df',
+        );
         assertSame(
           Object.values(summary.fileSha256).every(
             (value) =>

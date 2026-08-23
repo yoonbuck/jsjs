@@ -6,7 +6,6 @@ import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   lstat,
-  readdir,
   readFile,
   realpath,
   rename,
@@ -15,7 +14,6 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { load as parseYaml } from 'js-yaml';
 import { createNodeTest262Host } from './adapters/node.js';
 import { createJsjsTest262Engine } from './engine.js';
 import {
@@ -65,6 +63,7 @@ import {
   summarizeTest262Coverage,
 } from './coverage.js';
 import { featureNames, parseFeatureManifest } from './features.js';
+import { readTest262HarnessDefinitions } from './harness-definitions.js';
 import { parseTest262Metadata } from './metadata.js';
 import { assertPinnedCheckout, readTest262Pin } from './pin.js';
 import {
@@ -655,7 +654,16 @@ export function createAuditDependencies(options = {}) {
     },
     readIncludeDefinitions: async () => {
       const pin = await readPin();
-      return readHarnessDefinitions(pin.checkoutPath, repositoryRootUrl);
+      try {
+        return await readTest262HarnessDefinitions(
+          pin.checkoutPath,
+          repositoryRootUrl,
+        );
+      } catch (error) {
+        throw new Es2015AuditError(
+          error instanceof Error ? error.message : String(error),
+        );
+      }
     },
     readProvenanceManifest,
     readDecisionFragments,
@@ -2645,149 +2653,6 @@ function recordsByPath(records, name) {
     values.set(record.file, entries);
   }
   return values;
-}
-
-/**
- * Reads every harness name and joins the feature aliases from the pinned
- * `features.yml`. Both `name` and `name.js` resolve to the same facts, so an
- * include cannot discard a later dependency by choosing the other spelling.
- *
- * @param {string} checkoutPath
- * @param {URL} [repositoryRootUrl]
- */
-async function readHarnessDefinitions(
-  checkoutPath,
-  repositoryRootUrl = REPOSITORY_ROOT_URL,
-) {
-  const root = new URL(
-    `${checkoutPath.replace(/\/$/u, '')}/harness/`,
-    repositoryRootUrl,
-  );
-  const definitions = new Map();
-  for (const name of await listFiles(root)) {
-    const facts = { features: [], includes: [] };
-    definitions.set(name, facts);
-    if (name.endsWith('.js')) {
-      definitions.set(name.slice(0, -'.js'.length), facts);
-    }
-  }
-  /** @type {unknown} */
-  let manifest;
-  try {
-    manifest = parseYaml(await readFile(new URL('features.yml', root), 'utf8'));
-  } catch (error) {
-    throw new Es2015AuditError(
-      `vendor/test262/harness/features.yml is invalid: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-  }
-  if (
-    typeof manifest !== 'object' ||
-    manifest === null ||
-    Array.isArray(manifest)
-  ) {
-    throw new Es2015AuditError(
-      'vendor/test262/harness/features.yml must map include names to facts',
-    );
-  }
-
-  const declared = new Set();
-  for (const [name, value] of Object.entries(manifest)) {
-    const aliases = harnessAliases(name);
-    const identity = aliases[0];
-    if (declared.has(identity)) {
-      throw new Es2015AuditError(
-        `vendor/test262/harness/features.yml repeats include alias ${name}`,
-      );
-    }
-    if (!aliases.some((alias) => definitions.has(alias))) {
-      throw new Es2015AuditError(
-        `vendor/test262/harness/features.yml names missing include ${name}`,
-      );
-    }
-    declared.add(identity);
-    const facts = parseHarnessFacts(value, name);
-    for (const alias of aliases) {
-      definitions.set(alias, facts);
-    }
-  }
-  return definitions;
-}
-
-/** @param {string} name */
-function harnessAliases(name) {
-  return name.endsWith('.js')
-    ? [name.slice(0, -'.js'.length), name]
-    : [name, `${name}.js`];
-}
-
-/**
- * @param {unknown} value
- * @param {string} name
- */
-function parseHarnessFacts(value, name) {
-  if (Array.isArray(value)) {
-    return {
-      features: harnessStrings(value, `${name} features`),
-      includes: [],
-    };
-  }
-  if (typeof value !== 'object' || value === null) {
-    throw new Es2015AuditError(
-      `vendor/test262/harness/features.yml include ${name} has invalid facts`,
-    );
-  }
-  const facts = /** @type {Record<string, unknown>} */ (value);
-  for (const key of Object.keys(facts)) {
-    if (key !== 'features' && key !== 'includes') {
-      throw new Es2015AuditError(
-        `vendor/test262/harness/features.yml include ${name} has unknown key ${key}`,
-      );
-    }
-  }
-  return {
-    features: harnessStrings(facts.features ?? [], `${name} features`),
-    includes: harnessStrings(facts.includes ?? [], `${name} includes`),
-  };
-}
-
-/** @param {unknown} values @param {string} label */
-function harnessStrings(values, label) {
-  if (
-    !Array.isArray(values) ||
-    values.some((value) => typeof value !== 'string' || value === '')
-  ) {
-    throw new Es2015AuditError(
-      `vendor/test262/harness/features.yml ${label} must be non-empty strings`,
-    );
-  }
-  if (new Set(values).size !== values.length) {
-    throw new Es2015AuditError(
-      `vendor/test262/harness/features.yml ${label} must not repeat entries`,
-    );
-  }
-  return sortStrings([...values]);
-}
-
-/** @param {URL} directory @param {string} [prefix] */
-async function listFiles(directory, prefix = '') {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const names = sortStrings(entries.map((entry) => entry.name));
-  /** @type {string[]} */
-  const files = [];
-  for (const name of names) {
-    const entry = entries.find((candidate) => candidate.name === name);
-    const relative = `${prefix}${name}`;
-    if (entry?.isDirectory()) {
-      files.push(
-        ...(await listFiles(new URL(`${name}/`, directory), `${relative}/`)),
-      );
-    } else if (entry?.isFile()) {
-      files.push(relative);
-    }
-  }
-  return files;
 }
 
 /**

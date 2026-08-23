@@ -17,8 +17,9 @@ import {
   parseEs2015Promotion,
   promotionPaths,
 } from './es2015-promotion.js';
-import { serializeUpstreamSubset } from './es5-selection.js';
+import { parseEs5Selection, serializeUpstreamSubset } from './es5-selection.js';
 import { featureNames, parseFeatureManifest } from './features.js';
+import { readTest262HarnessDefinitions } from './harness-definitions.js';
 import {
   formatCoverageLines,
   renderCoverageSummary,
@@ -33,7 +34,10 @@ import {
 } from './report.js';
 import { runTest262Suite } from './runner.js';
 import { assertPinnedCheckout, readTest262Pin } from './pin.js';
-import { summarizeEs2015Classification } from './es2015-taxonomy.js';
+import {
+  buildEs2015Inventory,
+  summarizeEs2015Classification,
+} from './es2015-taxonomy.js';
 import {
   formatUpstreamSummaryLines,
   parseUpstreamSubset,
@@ -62,14 +66,44 @@ export const M1_PROXY_PATHS = Object.freeze([
   'test/built-ins/Reflect/setPrototypeOf/return-abrupt-from-result.js',
 ]);
 
+export const M1_CONSTRUCTOR_INCLUDE_PATHS = Object.freeze([
+  'test/built-ins/Reflect/apply/not-a-constructor.js',
+  'test/built-ins/Reflect/construct/not-a-constructor.js',
+  'test/built-ins/Reflect/defineProperty/not-a-constructor.js',
+  'test/built-ins/Reflect/deleteProperty/not-a-constructor.js',
+  'test/built-ins/Reflect/get/not-a-constructor.js',
+  'test/built-ins/Reflect/getOwnPropertyDescriptor/not-a-constructor.js',
+  'test/built-ins/Reflect/getPrototypeOf/not-a-constructor.js',
+  'test/built-ins/Reflect/has/not-a-constructor.js',
+  'test/built-ins/Reflect/isExtensible/not-a-constructor.js',
+  'test/built-ins/Reflect/preventExtensions/not-a-constructor.js',
+  'test/built-ins/Reflect/set/not-a-constructor.js',
+  'test/built-ins/Reflect/setPrototypeOf/not-a-constructor.js',
+]);
+
+export const M1_STALE_EXCLUSION_PATHS = Object.freeze([
+  'test/built-ins/Object/internals/DefineOwnProperty/consistent-value-function-arguments.js',
+  'test/built-ins/Object/internals/DefineOwnProperty/consistent-value-function-caller.js',
+  'test/built-ins/Object/internals/DefineOwnProperty/consistent-value-regexp-dollar1.js',
+  'test/built-ins/Object/internals/DefineOwnProperty/consistent-writable-regexp-dollar1.js',
+  'test/staging/sm/Array/unshift-with-enumeration.js',
+  'test/staging/sm/object/bug-1206700.js',
+  'test/staging/sm/strict/primitive-assignment.js',
+]);
+
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
 const M1_SCRATCH_ROOT = '.superpowers/issue-80/m1';
 const TAXONOMY_FILE = 'tools/test262/es2015-taxonomy.json';
 const AUDIT_EVIDENCE_FILE = 'tools/test262/es2015-audit-evidence.json';
 const SUBSET_FILE = 'tools/test262/upstream-subset.json';
+const SELECTION_FILE = 'tools/test262/es5-selection.json';
 const REPORT_FILE = 'docs/test262-report.jsonl';
 const CONFORMANCE_FILE = 'docs/conformance.md';
 const FEATURES_FILE = 'tools/test262/features.json';
+const M1_SELECTION_BASE_SHA256 =
+  '533e0b9fc165a026d64c4e64d783cf2585de7236600acacf228f06d27f23d8c8';
+const M1_SELECTION_HEAD_SHA256 =
+  '78ac694beb258be0b67c7788137c736b0b30cf7457e3a903d364d38c038b48df';
 
 /**
  * @typedef {{
@@ -122,10 +156,56 @@ export function parseM1Ledger(text) {
 }
 
 /**
+ * @param {string} selectionText
+ * @returns {{ baseText: string, headText: string }}
+ */
+export function projectM1Selection(selectionText) {
+  if (sha256(selectionText) !== M1_SELECTION_BASE_SHA256) {
+    throw new Error('M1 selection projection requires the exact BASE bytes');
+  }
+  const base = parseEs5Selection(selectionText);
+  let headText = selectionText;
+  for (const sourcePath of M1_STALE_EXCLUSION_PATHS) {
+    const matches = base.exclusions.filter(
+      (entry) => entry.path === sourcePath,
+    );
+    if (matches.length !== 1) {
+      throw new Error(
+        `M1 selection projection lacks exact exclusion: ${sourcePath}`,
+      );
+    }
+    const block = `${JSON.stringify(matches[0], null, 2)
+      .split('\n')
+      .map((line) => `    ${line}`)
+      .join('\n')},\n`;
+    if (headText.split(block).length !== 2) {
+      throw new Error(
+        `M1 selection projection cannot preserve exact bytes: ${sourcePath}`,
+      );
+    }
+    headText = headText.replace(block, '');
+  }
+  const head = parseEs5Selection(headText);
+  const expectedExclusions = base.exclusions.filter(
+    (entry) =>
+      entry.path === undefined ||
+      !M1_STALE_EXCLUSION_PATHS.includes(entry.path),
+  );
+  if (
+    JSON.stringify(head.exclusions) !== JSON.stringify(expectedExclusions) ||
+    sha256(headText) !== M1_SELECTION_HEAD_SHA256
+  ) {
+    throw new Error('M1 selection projection produced unexpected HEAD bytes');
+  }
+  return { baseText: selectionText, headText };
+}
+
+/**
  * @param {{
  *   ledgerText: string,
  *   taxonomyText: string,
  *   execution: any,
+ *   inventory: readonly any[],
  *   disposition?: any,
  * }} options
  */
@@ -138,6 +218,12 @@ export function buildM1AuthorityEvidence(options) {
   const byPath = new Map(
     taxonomy.classifications.map((entry) => [entry.path, entry]),
   );
+  const inventoryByPath = new Map(
+    options.inventory.map((entry) => [entry.path, entry]),
+  );
+  if (inventoryByPath.size !== options.inventory.length) {
+    throw new Error('M1 pinned inventory repeats a root');
+  }
   const baseline = paths.map((sourcePath) => {
     const entry = byPath.get(sourcePath);
     if (entry === undefined) {
@@ -179,14 +265,20 @@ export function buildM1AuthorityEvidence(options) {
     if (entry === undefined) {
       throw new Error(`M1 promotion lacks taxonomy root: ${sourcePath}`);
     }
+    const inventoryRoot = inventoryByPath.get(sourcePath);
+    if (
+      inventoryRoot === undefined ||
+      inventoryRoot.metadata === null ||
+      !sameStrings(inventoryRoot.metadata.features, entry.features) ||
+      !sameStrings(inventoryRoot.metadata.includes, entry.includes)
+    ) {
+      throw new Error(`M1 pinned inventory drift: ${sourcePath}`);
+    }
     return {
       path: sourcePath,
       variants: entry.variants,
-      features: [...entry.features],
-      includeFeatures: entry.provenance
-        .filter((value) => value.startsWith('include-feature:'))
-        .map((value) => value.slice('include-feature:'.length))
-        .sort(),
+      features: [...inventoryRoot.metadata.features],
+      includeFeatures: [...inventoryRoot.includeFeatures],
     };
   });
   const promotedPathsText =
@@ -235,6 +327,7 @@ export function buildM1PendingAuthority(options) {
     'docs/test262-report.jsonl',
     'tools/test262/es2015-audit-evidence.json',
     'tools/test262/es2015-taxonomy.json',
+    'tools/test262/es5-selection.json',
     'tools/test262/upstream-subset.json',
   ];
   requireExactTextPaths(
@@ -258,6 +351,15 @@ export function buildM1PendingAuthority(options) {
   ) {
     throw new Error('M1 authority BASE taxonomy bytes are inconsistent');
   }
+  const selection = projectM1Selection(
+    options.baseOutputs['tools/test262/es5-selection.json'],
+  );
+  if (
+    selection.headText !==
+    options.projectedOutputs['tools/test262/es5-selection.json']
+  ) {
+    throw new Error('M1 authority selection projection is inconsistent');
+  }
 
   const evidence = evidencePaths.map((path) => ({
     path,
@@ -273,9 +375,15 @@ export function buildM1PendingAuthority(options) {
     ...projectedPaths.map((path) => {
       const baseSha256 = sha256(options.baseOutputs[path]);
       const headSha256 = sha256(options.projectedOutputs[path]);
-      if (path === 'tools/test262/es2015-audit-evidence.json') {
+      if (
+        path === 'tools/test262/es2015-audit-evidence.json' ||
+        path === 'tools/test262/es5-selection.json'
+      ) {
         if (baseSha256 === headSha256) {
-          throw new Error('M1 audit projection must replace nonempty bytes');
+          if (path === 'tools/test262/es2015-audit-evidence.json') {
+            throw new Error('M1 audit projection must replace nonempty bytes');
+          }
+          throw new Error('M1 selection projection must replace exact bytes');
         }
         return {
           path,
@@ -348,6 +456,7 @@ export function buildM1PendingAuthority(options) {
  *   featuresText: string,
  *   evidence: ReturnType<typeof buildM1AuthorityEvidence>,
  *   execution: any,
+ *   inventory: readonly any[],
  * }} options
  */
 export function projectM1CoreOutputs(options) {
@@ -355,6 +464,7 @@ export function projectM1CoreOutputs(options) {
     ledgerText: `${options.evidence.paths.join('\n')}\n`,
     taxonomyText: options.taxonomyText,
     execution: options.execution,
+    inventory: options.inventory,
   });
   if (JSON.stringify(options.evidence) !== JSON.stringify(expectedEvidence)) {
     throw new Error('M1 projection requires exact authority evidence');
@@ -1166,7 +1276,13 @@ async function resolvePhysicalOutputTarget(candidate) {
 
 /**
  * @param {readonly string[]} argv
- * @param {{ environment?: Record<string, string | undefined> }} [dependencies]
+ * @param {{
+ *   environment?: Record<string, string | undefined>,
+ *   readPin?: () => Promise<{ repository: string, revision: string, checkoutPath: string }>,
+ *   assertPinnedCheckout?: (pin: { repository: string, revision: string, checkoutPath: string }) => Promise<void>,
+ *   readRoot?: (path: string) => Promise<string>,
+ *   readIncludeDefinitions?: () => Promise<ReadonlyMap<string, unknown> | Record<string, unknown>>,
+ * }} [dependencies]
  */
 export async function main(argv = [], dependencies = {}) {
   const options = parseM1Options(argv);
@@ -1175,7 +1291,7 @@ export async function main(argv = [], dependencies = {}) {
     throw new Error('Focused M1 Test262 tooling requires TZ=UTC');
   }
   return options.buildScratch
-    ? buildM1Scratch(options)
+    ? buildM1Scratch(options, dependencies)
     : executeM1Corpus(options, environment);
 }
 
@@ -1284,8 +1400,14 @@ function writeM1ExecutionSummary(document) {
 
 /**
  * @param {{ ledger: string, execution: string | null, output: string }} options
+ * @param {{
+ *   readPin?: () => Promise<{ repository: string, revision: string, checkoutPath: string }>,
+ *   assertPinnedCheckout?: (pin: { repository: string, revision: string, checkoutPath: string }) => Promise<void>,
+ *   readRoot?: (path: string) => Promise<string>,
+ *   readIncludeDefinitions?: () => Promise<ReadonlyMap<string, unknown> | Record<string, unknown>>,
+ * }} dependencies
  */
-async function buildM1Scratch(options) {
+async function buildM1Scratch(options, dependencies) {
   if (options.execution === null) {
     throw new Error('M1 build-scratch requires execution evidence');
   }
@@ -1295,6 +1417,7 @@ async function buildM1Scratch(options) {
     taxonomyPath,
     auditPath,
     subsetPath,
+    selectionPath,
     reportPath,
     conformancePath,
     featuresPath,
@@ -1305,6 +1428,7 @@ async function buildM1Scratch(options) {
     resolveM1InputPath(REPOSITORY_ROOT_URL, TAXONOMY_FILE),
     resolveM1InputPath(REPOSITORY_ROOT_URL, AUDIT_EVIDENCE_FILE),
     resolveM1InputPath(REPOSITORY_ROOT_URL, SUBSET_FILE),
+    resolveM1InputPath(REPOSITORY_ROOT_URL, SELECTION_FILE),
     resolveM1InputPath(REPOSITORY_ROOT_URL, REPORT_FILE),
     resolveM1InputPath(REPOSITORY_ROOT_URL, CONFORMANCE_FILE),
     resolveM1InputPath(REPOSITORY_ROOT_URL, FEATURES_FILE),
@@ -1316,6 +1440,7 @@ async function buildM1Scratch(options) {
     taxonomyText,
     auditEvidenceText,
     subsetText,
+    selectionText,
     reportText,
     conformanceText,
     featuresText,
@@ -1325,15 +1450,53 @@ async function buildM1Scratch(options) {
     readFile(taxonomyPath, 'utf8'),
     readFile(auditPath, 'utf8'),
     readFile(subsetPath, 'utf8'),
+    readFile(selectionPath, 'utf8'),
     readFile(reportPath, 'utf8'),
     readFile(conformancePath, 'utf8'),
     readFile(featuresPath, 'utf8'),
   ]);
   const execution = JSON.parse(executionText);
+  const taxonomy = JSON.parse(taxonomyText);
+  const paths = verifyM1Ledger(ledgerText, taxonomy);
+  const pin = await (
+    dependencies.readPin ?? (() => readTest262Pin(REPOSITORY_ROOT_URL))
+  )();
+  if (
+    taxonomy?.pin?.repository !== pin.repository ||
+    taxonomy?.pin?.revision !== pin.revision
+  ) {
+    throw new Error('M1 taxonomy does not match the pinned Test262 checkout');
+  }
+  await (
+    dependencies.assertPinnedCheckout ??
+    ((currentPin) => assertPinnedCheckout(currentPin, REPOSITORY_ROOT_URL))
+  )(pin);
+  const host = createNodeTest262Host({
+    root: new URL(
+      `${pin.checkoutPath.replace(/\/$/u, '')}/`,
+      REPOSITORY_ROOT_URL,
+    ),
+  });
+  const readRoot =
+    dependencies.readRoot ?? ((sourcePath) => host.readTest(sourcePath));
+  const readIncludeDefinitions =
+    dependencies.readIncludeDefinitions ??
+    (() =>
+      readTest262HarnessDefinitions(pin.checkoutPath, REPOSITORY_ROOT_URL));
+  const inventory = buildEs2015Inventory({
+    roots: await Promise.all(
+      paths.map(async (sourcePath) => ({
+        path: sourcePath,
+        source: await readRoot(sourcePath),
+      })),
+    ),
+    includeDefinitions: await readIncludeDefinitions(),
+  });
   const evidence = buildM1AuthorityEvidence({
     ledgerText,
     taxonomyText,
     execution,
+    inventory,
   });
   const projected = projectM1CoreOutputs({
     taxonomyText,
@@ -1344,7 +1507,9 @@ async function buildM1Scratch(options) {
     featuresText,
     evidence,
     execution,
+    inventory,
   });
+  const selection = projectM1Selection(selectionText);
   const evidenceTexts = {
     'tools/test262/es2015-m1-paths.json': renderM1Json(evidence.paths),
     'tools/test262/es2015-m1-baseline.json': renderM1Json(evidence.baseline),
@@ -1362,6 +1527,7 @@ async function buildM1Scratch(options) {
     [REPORT_FILE]: reportText,
     [AUDIT_EVIDENCE_FILE]: auditEvidenceText,
     [TAXONOMY_FILE]: taxonomyText,
+    [SELECTION_FILE]: selection.baseText,
     [SUBSET_FILE]: subsetText,
   };
   const projectedOutputs = {
@@ -1369,6 +1535,7 @@ async function buildM1Scratch(options) {
     [REPORT_FILE]: projected.reportText,
     [AUDIT_EVIDENCE_FILE]: projected.auditEvidenceText,
     [TAXONOMY_FILE]: projected.taxonomyText,
+    [SELECTION_FILE]: selection.headText,
     [SUBSET_FILE]: projected.subsetText,
   };
   const authority = buildM1PendingAuthority({
@@ -1421,6 +1588,7 @@ async function buildM1Scratch(options) {
       projected.auditEvidenceText,
     ],
     ['projected/tools/test262/es2015-taxonomy.json', projected.taxonomyText],
+    ['projected/tools/test262/es5-selection.json', selection.headText],
     ['projected/tools/test262/upstream-subset.json', projected.subsetText],
     ['authority-record.json', renderM1Json(authority)],
     ['protected-projection.json', renderM1Json(protectedProjection)],
@@ -1451,7 +1619,7 @@ async function buildM1Scratch(options) {
       residualRoots: M1.roots - completePass.length,
       residualVariants: M1.variants - completePassVariants,
     },
-    authoritySha256: sha256(renderM1Json(authority)),
+    authoritySha256: sha256(`${JSON.stringify(authority)}\n`),
     protectedProjectionSha256,
     fileSha256,
   };
