@@ -21,6 +21,9 @@
 - The diagnostic consumer `eb4bcbe9ae6d163d0b2578a40d22d7684d382d2b` is evidence only. Never amend, cherry-pick, push, or merge it as the rebuilt consumer.
 - M1 remains `pending` throughout the repair PR. Only the later semantic consumer changes corrected M1 `pending -> applied`.
 - The one-use marker is accepted only from ordinary `pull_request` PR-body scanning. Never activate it on `pull_request_target` or through local `--profile/--marker`.
+- `validateM1AuthorityRepairRange()` independently requires
+  `deps.environment.GITHUB_EVENT_NAME === "pull_request"` even after a marker
+  object reaches dispatch.
 - The unchanged BASE checker must fail the repair with exactly `A provenance-owned PR range requires one authoritative provenance marker`.
 - That one provenance-base-guard failure requires explicit administrator review and merge authorization. No other CI, test, CodeQL, extraction, warning, or alert failure is waivable.
 - Immutable corrected checker literals are:
@@ -41,6 +44,9 @@
 - Repair local checks are focused provenance/type/lint/format/range checks. Semantic local checks are exact M1, exact seven paths, focused Node/browser files, audit/selection/exclusion/provenance checks, and benchmark smoke.
 - Every task uses `superpowers:subagent-driven-development`: one fresh worker, then a fresh specification-compliance reviewer, then a different fresh code-quality reviewer, with fix/retest/re-review loops.
 - Every persistent commit is authored by `Copilot <223556219+Copilot@users.noreply.github.com>` and includes `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
+- Every shell step is self-contained. Each bash block rederives its commit,
+  marker, PR, worktree, and handoff variables or reads them from an explicit
+  ignored JSON/text file; no step assumes shell variable persistence.
 - Use only repository-relative scratch under `.superpowers/` and `.benchmark-results/`. Never use `/tmp`, `/var/tmp`, or `mktemp`.
 
 ---
@@ -455,6 +461,16 @@ Each task repeats all gates:
   - `pull_request_target`; and
   - local `--profile=m1-authority-repair --marker="$REPAIR_MARKER"`.
 
+  Separately call `validateM1AuthorityRepairRange()` with an already parsed
+  exact marker while `deps.environment.GITHUB_EVENT_NAME` is
+  `pull_request_target`, `push`, or absent. Each must fail:
+
+  ```text
+  M1 authority repair requires an ordinary pull_request event
+  ```
+
+  This proves validator event enforcement does not rely only on scanner gating.
+
 - [ ] **Step 4: Run marker RED**
 
   Run:
@@ -557,6 +573,8 @@ Each task repeats all gates:
 
   The validator:
 
+  - independently requires
+    `deps.environment.GITHUB_EVENT_NAME === 'pull_request'`;
   - requires exact event/merge BASE;
   - reads and hashes exact BASE checker bytes;
   - validates marker BASE fields;
@@ -753,7 +771,15 @@ Each task repeats all gates:
   base = '554afc367657439d116d23f4477bb24787a0e261'
   head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
   raw = subprocess.check_output(
-      ['git', 'diff', '--name-status', '-z', f'{base}...{head}']
+      [
+          'git',
+          'diff',
+          '--name-status',
+          '-z',
+          '--find-renames',
+          '--find-copies',
+          f'{base}...{head}',
+      ]
   )
   fields = raw.decode().split('\0')
   rows = []
@@ -809,6 +835,8 @@ Each task repeats all gates:
   Construct the exact marker from the stable interface and run:
 
   ```bash
+  REPAIR_BASE=554afc367657439d116d23f4477bb24787a0e261
+  REPAIR_HEAD=$(git rev-parse HEAD)
   REPAIR_MARKER=$(cat <<'EOF'
   <!-- es2015-m1-authority-repair
   parent:70
@@ -822,6 +850,9 @@ Each task repeats all gates:
   -->
   EOF
   )
+  mkdir -p .superpowers/sdd/2026-08-23-m1-authority-repair
+  printf '%s\n' "$REPAIR_MARKER" \
+    > .superpowers/sdd/2026-08-23-m1-authority-repair/repair-marker.txt
   PR_BODY="$REPAIR_MARKER" \
   GITHUB_EVENT_NAME=pull_request \
   TZ=UTC node tools/test262/es2015-provenance-check.js \
@@ -838,6 +869,10 @@ Each task repeats all gates:
   Create a detached BASE worktree:
 
   ```bash
+  REPAIR_BASE=554afc367657439d116d23f4477bb24787a0e261
+  REPAIR_HEAD=$(git rev-parse HEAD)
+  REPAIR_MARKER=$(cat \
+    .superpowers/sdd/2026-08-23-m1-authority-repair/repair-marker.txt)
   REPAIR_ROOT=$(git rev-parse --show-toplevel)
   BASE_WORKTREE=$REPAIR_ROOT/.superpowers/sdd/2026-08-23-m1-authority-repair/base-checker
   git worktree add --detach "$BASE_WORKTREE" "$REPAIR_BASE"
@@ -885,6 +920,14 @@ Each task repeats all gates:
   Run:
 
   ```bash
+  REPAIR_BASE=554afc367657439d116d23f4477bb24787a0e261
+  git fetch origin main
+  if test "$(git rev-parse origin/main)" != "$REPAIR_BASE"; then
+    echo 'origin/main moved; abandon this stale repair range and re-review all identities' >&2
+    exit 1
+  fi
+  REPAIR_MARKER=$(cat \
+    .superpowers/sdd/2026-08-23-m1-authority-repair/repair-marker.txt)
   git push -u origin yoonbuck-m1-authority-repair
   REPAIR_PR_URL=$(gh pr create \
     --repo yoonbuck/jsjs \
@@ -917,6 +960,12 @@ Each task repeats all gates:
   Poll:
 
   ```bash
+  REPAIR_PR=$(gh pr list --repo yoonbuck/jsjs \
+    --head yoonbuck-m1-authority-repair \
+    --base main \
+    --state open \
+    --json number \
+    --jq 'if length == 1 then .[0].number else error("expected one repair PR") end')
   while true; do
     gh pr checks "$REPAIR_PR" --repo yoonbuck/jsjs \
       --json name,state,bucket,link \
@@ -957,21 +1006,32 @@ Each task repeats all gates:
   Run:
 
   ```bash
+  REPAIR_PR=$(gh pr list --repo yoonbuck/jsjs \
+    --head yoonbuck-m1-authority-repair \
+    --base main \
+    --state open \
+    --json number \
+    --jq 'if length == 1 then .[0].number else error("expected one repair PR") end')
+  gh pr checks "$REPAIR_PR" --repo yoonbuck/jsjs \
+    --json name,state,bucket,link \
+    > .superpowers/sdd/2026-08-23-m1-authority-repair/repair-checks.json
   REVIEWED_REPAIR_HEAD=$(gh pr view "$REPAIR_PR" \
     --repo yoonbuck/jsjs --json headRefOid --jq .headRefOid)
   test "$REVIEWED_REPAIR_HEAD" = "$(git rev-parse HEAD)"
-  gh api 'repos/yoonbuck/jsjs/code-scanning/analyses?per_page=100' \
-    > .superpowers/sdd/2026-08-23-m1-authority-repair/repair-codeql.json
-  REVIEWED_REPAIR_HEAD="$REVIEWED_REPAIR_HEAD" node - <<'JS'
-  const analyses = require('./.superpowers/sdd/2026-08-23-m1-authority-repair/repair-codeql.json')
-    .filter((analysis) => analysis.commit_sha === process.env.REVIEWED_REPAIR_HEAD);
-  if (analyses.length < 2) {
-    throw new Error('repair HEAD lacks both CodeQL analyses');
+  node - <<'JS'
+  const checks = require('./.superpowers/sdd/2026-08-23-m1-authority-repair/repair-checks.json');
+  const codeql = checks.filter((check) =>
+    check.name.toLowerCase().includes('codeql'),
+  );
+  if (codeql.length < 2) {
+    throw new Error(`repair PR lacks both CodeQL check-runs: ${JSON.stringify(codeql)}`);
   }
-  if (analyses.some((analysis) => analysis.error || analysis.warning)) {
-    throw new Error('repair HEAD CodeQL contains errors or warnings');
+  if (codeql.some((check) => check.bucket !== 'pass')) {
+    throw new Error(`repair PR CodeQL checks are not successful: ${JSON.stringify(codeql)}`);
   }
   JS
+  printf '%s\n' "$REVIEWED_REPAIR_HEAD" \
+    > .superpowers/sdd/2026-08-23-m1-authority-repair/reviewed-repair-head.txt
   gh api 'repos/yoonbuck/jsjs/code-scanning/alerts?state=open&per_page=100' \
     > .superpowers/sdd/2026-08-23-m1-authority-repair/open-alerts.json
   test "$(node -e \
@@ -993,6 +1053,17 @@ Each task repeats all gates:
   Run only after Step 12:
 
   ```bash
+  REPAIR_PR=$(gh pr list --repo yoonbuck/jsjs \
+    --head yoonbuck-m1-authority-repair \
+    --base main \
+    --state open \
+    --json number \
+    --jq 'if length == 1 then .[0].number else error("expected one repair PR") end')
+  REVIEWED_REPAIR_HEAD=$(cat \
+    .superpowers/sdd/2026-08-23-m1-authority-repair/reviewed-repair-head.txt)
+  CURRENT_REPAIR_HEAD=$(gh pr view "$REPAIR_PR" \
+    --repo yoonbuck/jsjs --json headRefOid --jq .headRefOid)
+  test "$CURRENT_REPAIR_HEAD" = "$REVIEWED_REPAIR_HEAD"
   gh pr merge "$REPAIR_PR" \
     --repo yoonbuck/jsjs \
     --admin \
@@ -1009,6 +1080,13 @@ Each task repeats all gates:
   Run:
 
   ```bash
+  REPAIR_PR=$(gh pr list --repo yoonbuck/jsjs \
+    --head yoonbuck-m1-authority-repair \
+    --state merged \
+    --json number \
+    --jq 'if length >= 1 then .[0].number else error("missing merged repair PR") end')
+  REPAIR_MERGE=$(gh pr view "$REPAIR_PR" \
+    --repo yoonbuck/jsjs --json mergeCommit --jq .mergeCommit.oid)
   for attempt in $(seq 1 60); do
     gh run list --repo yoonbuck/jsjs --commit "$REPAIR_MERGE" \
       --json databaseId,workflowName,status,conclusion,url \
@@ -1063,6 +1141,17 @@ Each task repeats all gates:
   Run:
 
   ```bash
+  REPAIR_PR=$(gh pr list --repo yoonbuck/jsjs \
+    --head yoonbuck-m1-authority-repair \
+    --state merged \
+    --json number \
+    --jq 'if length >= 1 then .[0].number else error("missing merged repair PR") end')
+  REPAIR_MERGE=$(gh pr view "$REPAIR_PR" \
+    --repo yoonbuck/jsjs --json mergeCommit --jq .mergeCommit.oid)
+  REVIEWED_REPAIR_HEAD=$(cat \
+    .superpowers/sdd/2026-08-23-m1-authority-repair/reviewed-repair-head.txt)
+  REPAIR_ROOT=$(git rev-parse --show-toplevel)
+  BASE_WORKTREE=$REPAIR_ROOT/.superpowers/sdd/2026-08-23-m1-authority-repair/base-checker
   cat > .superpowers/sdd/2026-08-23-m1-authority-repair/repair-delivery.json <<EOF
   {
     "repairPr": $REPAIR_PR,
@@ -1550,6 +1639,9 @@ Each task repeats all gates:
   Run:
 
   ```bash
+  REPAIR_HANDOFF=/home/jordan/jsjs/.worktrees/m1-authority-repair/.superpowers/sdd/2026-08-23-m1-authority-repair/repair-delivery.json
+  REPAIR_MERGE=$(node -e \
+    "const h=require('$REPAIR_HANDOFF');process.stdout.write(h.repairMergeSha)")
   git diff --exit-code "$REPAIR_MERGE" -- \
     tools/test262/es2015-provenance.json \
     tools/test262/es2015-audit-evidence.json \
@@ -1655,6 +1747,9 @@ Each task repeats all gates:
   -->
   EOF
   )
+  mkdir -p .superpowers/issue-80/m1
+  printf '%s\n' "$CONSUMER_MARKER" \
+    > .superpowers/issue-80/m1/consumer-marker.txt
   ```
 
   Every field other than the exact repair merge SHA is literal.
@@ -1664,6 +1759,22 @@ Each task repeats all gates:
   Run:
 
   ```bash
+  REPAIR_HANDOFF=/home/jordan/jsjs/.worktrees/m1-authority-repair/.superpowers/sdd/2026-08-23-m1-authority-repair/repair-delivery.json
+  REPAIR_MERGE=$(node -e \
+    "const h=require('$REPAIR_HANDOFF');process.stdout.write(h.repairMergeSha)")
+  CONSUMER_MARKER=$(cat <<EOF
+  <!-- es2015-roadmap-authority-consume
+  parent:70
+  code:M1
+  issue:80
+  profile:roadmap-reclassification:M1
+  base:$REPAIR_MERGE
+  source-path-sha256:65529ed8f9bdf88576314e95f4f164ac2c613e9ec44f0aae042a79aa5f8706b4
+  source-entry-sha256:null
+  protected-projection-sha256:22bf654462044eb3febfbcec43e1c56a20cd89392c763e8d141fd6f3274289ed
+  -->
+  EOF
+  )
   SEMANTIC_ROOT=$(git rev-parse --show-toplevel)
   REPAIR_BASE_WORKTREE=$SEMANTIC_ROOT/.superpowers/issue-80/m1/repaired-base
   git worktree add --detach "$REPAIR_BASE_WORKTREE" "$REPAIR_MERGE"
@@ -1852,6 +1963,8 @@ Each task repeats all gates:
   CONSUMER_TREE=$(git write-tree)
   CONSUMER_CHECK_HEAD=$(printf 'corrected M1 consumer candidate\n' |
     git commit-tree "$CONSUMER_TREE" -p "$(git rev-parse HEAD)")
+  printf '%s\n' "$CONSUMER_CHECK_HEAD" \
+    > .superpowers/issue-80/m1/consumer-check-head.txt
   ```
 
 - [ ] **Step 10: Run immutable repaired-BASE GREEN**
@@ -1859,6 +1972,15 @@ Each task repeats all gates:
   From the detached `REPAIR_MERGE` worktree:
 
   ```bash
+  REPAIR_HANDOFF=/home/jordan/jsjs/.worktrees/m1-authority-repair/.superpowers/sdd/2026-08-23-m1-authority-repair/repair-delivery.json
+  REPAIR_MERGE=$(node -e \
+    "const h=require('$REPAIR_HANDOFF');process.stdout.write(h.repairMergeSha)")
+  REPAIR_BASE_WORKTREE=$(git rev-parse --show-toplevel)/.superpowers/issue-80/m1/repaired-base
+  CONSUMER_CHECK_HEAD=$(cat \
+    .superpowers/issue-80/m1/consumer-check-head.txt)
+  CONSUMER_MARKER=$(cat \
+    .superpowers/issue-80/m1/consumer-marker.txt)
+  cd "$REPAIR_BASE_WORKTREE"
   TZ=UTC node tools/test262/es2015-provenance-check.js \
     --check-range \
     --base="$REPAIR_MERGE" \
@@ -2025,6 +2147,9 @@ Each task repeats all gates:
   Run:
 
   ```bash
+  REPAIR_HANDOFF=/home/jordan/jsjs/.worktrees/m1-authority-repair/.superpowers/sdd/2026-08-23-m1-authority-repair/repair-delivery.json
+  REPAIR_MERGE=$(node -e \
+    "const h=require('$REPAIR_HANDOFF');process.stdout.write(h.repairMergeSha)")
   CONSUMER_MARKER=$(cat <<EOF
   <!-- es2015-roadmap-authority-consume
   parent:70
@@ -2073,6 +2198,12 @@ Each task repeats all gates:
   Run:
 
   ```bash
+  CONSUMER_PR=$(gh pr list --repo yoonbuck/jsjs \
+    --head yoonbuck-issue-80-reflect \
+    --base main \
+    --state open \
+    --json number \
+    --jq 'if length == 1 then .[0].number else error("expected one consumer PR") end')
   while true; do
     gh pr checks "$CONSUMER_PR" --repo yoonbuck/jsjs \
       --json name,state,bucket,link \
@@ -2108,23 +2239,32 @@ Each task repeats all gates:
   Run:
 
   ```bash
+  CONSUMER_PR=$(gh pr list --repo yoonbuck/jsjs \
+    --head yoonbuck-issue-80-reflect \
+    --base main \
+    --state open \
+    --json number \
+    --jq 'if length == 1 then .[0].number else error("expected one consumer PR") end')
+  gh pr checks "$CONSUMER_PR" --repo yoonbuck/jsjs \
+    --json name,state,bucket,link \
+    > .superpowers/issue-80/m1/consumer-checks.json
   REVIEWED_CONSUMER_HEAD=$(gh pr view "$CONSUMER_PR" \
     --repo yoonbuck/jsjs --json headRefOid --jq .headRefOid)
   test "$REVIEWED_CONSUMER_HEAD" = "$(git rev-parse HEAD)"
-  gh api 'repos/yoonbuck/jsjs/code-scanning/analyses?per_page=100' \
-    > .superpowers/issue-80/m1/consumer-codeql.json
-  REVIEWED_CONSUMER_HEAD="$REVIEWED_CONSUMER_HEAD" node - <<'JS'
-  const analyses = require('./.superpowers/issue-80/m1/consumer-codeql.json')
-    .filter((analysis) =>
-      analysis.commit_sha === process.env.REVIEWED_CONSUMER_HEAD
-    );
-  if (analyses.length < 2) {
-    throw new Error('consumer HEAD lacks both CodeQL analyses');
+  node - <<'JS'
+  const checks = require('./.superpowers/issue-80/m1/consumer-checks.json');
+  const codeql = checks.filter((check) =>
+    check.name.toLowerCase().includes('codeql'),
+  );
+  if (codeql.length < 2) {
+    throw new Error(`consumer PR lacks both CodeQL check-runs: ${JSON.stringify(codeql)}`);
   }
-  if (analyses.some((analysis) => analysis.error || analysis.warning)) {
-    throw new Error('consumer HEAD CodeQL contains errors or warnings');
+  if (codeql.some((check) => check.bucket !== 'pass')) {
+    throw new Error(`consumer PR CodeQL checks are not successful: ${JSON.stringify(codeql)}`);
   }
   JS
+  printf '%s\n' "$REVIEWED_CONSUMER_HEAD" \
+    > .superpowers/issue-80/m1/reviewed-consumer-head.txt
   gh api 'repos/yoonbuck/jsjs/code-scanning/alerts?state=open&per_page=100' \
     > .superpowers/issue-80/m1/consumer-open-alerts.json
   test "$(node -e \
@@ -2136,6 +2276,17 @@ Each task repeats all gates:
   After required human review and all-green checks:
 
   ```bash
+  CONSUMER_PR=$(gh pr list --repo yoonbuck/jsjs \
+    --head yoonbuck-issue-80-reflect \
+    --base main \
+    --state open \
+    --json number \
+    --jq 'if length == 1 then .[0].number else error("expected one consumer PR") end')
+  REVIEWED_CONSUMER_HEAD=$(cat \
+    .superpowers/issue-80/m1/reviewed-consumer-head.txt)
+  CURRENT_CONSUMER_HEAD=$(gh pr view "$CONSUMER_PR" \
+    --repo yoonbuck/jsjs --json headRefOid --jq .headRefOid)
+  test "$CURRENT_CONSUMER_HEAD" = "$REVIEWED_CONSUMER_HEAD"
   gh pr merge "$CONSUMER_PR" \
     --repo yoonbuck/jsjs \
     --squash \
@@ -2151,6 +2302,13 @@ Each task repeats all gates:
   Run:
 
   ```bash
+  CONSUMER_PR=$(gh pr list --repo yoonbuck/jsjs \
+    --head yoonbuck-issue-80-reflect \
+    --state merged \
+    --json number \
+    --jq 'if length >= 1 then .[0].number else error("missing merged consumer PR") end')
+  CONSUMER_MERGE=$(gh pr view "$CONSUMER_PR" \
+    --repo yoonbuck/jsjs --json mergeCommit --jq .mergeCommit.oid)
   for attempt in $(seq 1 60); do
     gh run list --repo yoonbuck/jsjs --commit "$CONSUMER_MERGE" \
       --json databaseId,workflowName,status,conclusion,url \
@@ -2225,6 +2383,21 @@ Each task repeats all gates:
   Compute:
 
   ```bash
+  SEMANTIC_ROOT=$(git rev-parse --show-toplevel)
+  REPAIR_HANDOFF=/home/jordan/jsjs/.worktrees/m1-authority-repair/.superpowers/sdd/2026-08-23-m1-authority-repair/repair-delivery.json
+  REPAIR_PR=$(node -e \
+    "const h=require('$REPAIR_HANDOFF');process.stdout.write(String(h.repairPr))")
+  REPAIR_MERGE=$(node -e \
+    "const h=require('$REPAIR_HANDOFF');process.stdout.write(h.repairMergeSha)")
+  CONSUMER_PR=$(gh pr list --repo yoonbuck/jsjs \
+    --head yoonbuck-issue-80-reflect \
+    --state merged \
+    --json number \
+    --jq 'if length >= 1 then .[0].number else error("missing merged consumer PR") end')
+  CONSUMER_MERGE=$(gh pr view "$CONSUMER_PR" \
+    --repo yoonbuck/jsjs --json mergeCommit --jq .mergeCommit.oid)
+  REVIEWED_CONSUMER_HEAD=$(cat \
+    "$SEMANTIC_ROOT/.superpowers/issue-80/m1/reviewed-consumer-head.txt")
   PROMOTION_SHA=$(sha256sum \
     tools/test262/es2015-m1-promotion.json | cut -d' ' -f1)
   SELECTION_SHA=$(sha256sum \
@@ -2292,6 +2465,34 @@ Each task repeats all gates:
   Run:
 
   ```bash
+  SEMANTIC_ROOT=/home/jordan/jsjs/.worktrees/issue80-reflect
+  REPAIR_HANDOFF=/home/jordan/jsjs/.worktrees/m1-authority-repair/.superpowers/sdd/2026-08-23-m1-authority-repair/repair-delivery.json
+  REPAIR_PR=$(node -e \
+    "const h=require('$REPAIR_HANDOFF');process.stdout.write(String(h.repairPr))")
+  REPAIR_MERGE=$(node -e \
+    "const h=require('$REPAIR_HANDOFF');process.stdout.write(h.repairMergeSha)")
+  CONSUMER_PR=$(gh pr list --repo yoonbuck/jsjs \
+    --head yoonbuck-issue-80-reflect \
+    --state merged \
+    --json number \
+    --jq 'if length >= 1 then .[0].number else error("missing merged consumer PR") end')
+  CONSUMER_MERGE=$(gh pr view "$CONSUMER_PR" \
+    --repo yoonbuck/jsjs --json mergeCommit --jq .mergeCommit.oid)
+  REVIEWED_CONSUMER_HEAD=$(cat \
+    "$SEMANTIC_ROOT/.superpowers/issue-80/m1/reviewed-consumer-head.txt")
+  PROMOTION_SHA=$(sha256sum \
+    "$SEMANTIC_ROOT/tools/test262/es2015-m1-promotion.json" | cut -d' ' -f1)
+  SELECTION_SHA=$(sha256sum \
+    "$SEMANTIC_ROOT/tools/test262/es5-selection.json" | cut -d' ' -f1)
+  RESIDUAL_SHA=$(cd "$SEMANTIC_ROOT" && node --input-type=module -e "
+    import { createHash } from 'node:crypto';
+    import { readFileSync } from 'node:fs';
+    const entries=JSON.parse(readFileSync('tools/test262/es2015-m1-owner-deltas.json','utf8'));
+    const text=entries.map((entry)=>entry.path).join('\\n')+'\\n';
+    process.stdout.write(createHash('sha256').update(text).digest('hex'));
+  ")
+  MAIN_VERIFY=$SEMANTIC_ROOT/.superpowers/issue-80/m1/main-verify
+  REPAIR_BASE_WORKTREE=$SEMANTIC_ROOT/.superpowers/issue-80/m1/repaired-base
   cat > "$SEMANTIC_ROOT/.superpowers/sdd/2026-08-23-m1-authority-repair/consumer-closure.json" <<EOF
   {
     "repairPr": $REPAIR_PR,
@@ -2327,6 +2528,7 @@ Each task repeats all gates:
 | Generic report feature preservation                                            | Task 1                        |
 | Exact one-use marker grammar                                                   | Tasks 2-3                     |
 | Ordinary PR only; no repair local profile or pull_request_target activation    | Tasks 2-3                     |
+| Validator independently enforces ordinary pull_request event                   | Task 2                        |
 | Literal corrected HEAD constants                                               | Task 2                        |
 | Self-consistent alternate marker/HEAD rejection                                | Task 2                        |
 | Exact six-path statuses and no foreign operations                              | Tasks 2-3                     |
@@ -2337,6 +2539,12 @@ Each task repeats all gates:
 | Exact new selection replace-exact output                                       | Tasks 2, 4, and 5             |
 | M1 stays pending in repair                                                     | Tasks 2-3                     |
 | Expected old BASE guard failure/admin exception only                           | Task 3                        |
+| Repair push rechecks exact origin/main BASE                                    | Task 3                        |
+| Admin merge rechecks reviewed repair head                                      | Task 3                        |
+| PR CodeQL uses successful check-runs plus zero alerts                          | Tasks 3 and 6                 |
+| Exact-main CodeQL uses commit_sha matching                                     | Tasks 3 and 6                 |
+| Fresh-shell variable rederivation/handoff files                                | Every delivery task           |
+| Manual diff uses find-renames/find-copies                                      | Task 3                        |
 | Repair CI/CodeQL/exact-main/handoff                                            | Task 3                        |
 | Drop blocked consumer and rebase preconsumer semantics                         | Task 4                        |
 | Pinned inventory include closure: 12 nonempty / 91 empty                       | Task 4                        |
