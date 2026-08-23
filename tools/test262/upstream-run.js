@@ -49,6 +49,8 @@ import {
   parseEs2015Promotion,
   promotionPaths,
 } from './es2015-promotion.js';
+import { ES2015_M1_PROMOTION_FILE } from './es2015-roadmap-promotions.js';
+import { createPromotionReportFeaturesForPath } from './promotion-report-features.js';
 import { formatRecordLine, formatReportLines } from './report.js';
 import { runTest262Suite } from './runner.js';
 import {
@@ -82,6 +84,7 @@ import {
 import { assertPinnedCheckout, readTest262Pin } from './pin.js';
 
 const REPOSITORY_ROOT_URL = new URL('../../', import.meta.url);
+const M1_PROMOTION_GROUP = 'es2015/m1-reflect';
 
 /** Re-exported for consumers that import from this module. */
 export {
@@ -126,6 +129,39 @@ function relativePath(from, to) {
  */
 function readRepositoryFile(path) {
   return readFile(new URL(path, REPOSITORY_ROOT_URL), 'utf8');
+}
+
+/**
+ * @param {(path: string) => Promise<string>} [readPromotion]
+ * @returns {Promise<string[]>}
+ */
+async function readUpstreamPromotionTexts(readPromotion = readRepositoryFile) {
+  const [promotionText, h0PromotionText, m1PromotionText] = await Promise.all([
+    readPromotion(ES2015_PROMOTION_FILE),
+    readPromotion(ES2015_H0_PROMOTION_FILE),
+    readOptionalPromotion(ES2015_M1_PROMOTION_FILE, readPromotion),
+  ]);
+  return [
+    promotionText,
+    h0PromotionText,
+    ...(m1PromotionText === null ? [] : [m1PromotionText]),
+  ];
+}
+
+/**
+ * @param {string} path
+ * @param {(path: string) => Promise<string>} readPromotion
+ * @returns {Promise<string | null>}
+ */
+async function readOptionalPromotion(path, readPromotion) {
+  try {
+    return await readPromotion(path);
+  } catch (error) {
+    if (/** @type {any} */ (error)?.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -200,11 +236,16 @@ export async function main(argv = []) {
   );
   const host = createNodeTest262Host({ root: pin.checkoutPath });
   const paths = upstreamSubsetPaths(subset);
-  const promotionTexts = await Promise.all([
-    readRepositoryFile(ES2015_PROMOTION_FILE),
-    readRepositoryFile(ES2015_H0_PROMOTION_FILE),
-  ]);
+  const promotionTexts = await readUpstreamPromotionTexts();
   const promotions = promotionTexts.map((text) => parseEs2015Promotion(text));
+  const m1Promotion = promotions.find(
+    (promotion) =>
+      'groupName' in promotion && promotion.groupName === M1_PROMOTION_GROUP,
+  );
+  const reportFeaturesForPath =
+    m1Promotion === undefined
+      ? undefined
+      : createPromotionReportFeaturesForPath(m1Promotion);
   const promotionRoots = [];
   for (const promotion of promotions) {
     for (const path of promotionPaths(promotion)) {
@@ -229,6 +270,7 @@ export async function main(argv = []) {
     paths,
     supportedFeatures,
     supportedFeaturesForPath,
+    reportFeaturesForPath,
   });
   const coverage = summarizeTest262Coverage({
     inventory: await collectTest262Inventory({ host }),

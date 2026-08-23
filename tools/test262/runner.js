@@ -102,6 +102,10 @@ export { DEFAULT_INCLUDES };
  *     file: string,
  *     metadata: Test262Metadata,
  *   ) => readonly string[] | undefined,
+ *   reportFeaturesForPath?: (
+ *     file: string,
+ *     metadata: Test262Metadata,
+ *   ) => readonly string[] | undefined,
  * }} Test262SuiteOptions
  *
  * @typedef {{
@@ -112,6 +116,10 @@ export { DEFAULT_INCLUDES };
  *   supportedFeatures?: readonly string[],
  *   skipFeatures?: readonly string[],
  *   supportedFeaturesForPath?: (
+ *     file: string,
+ *     metadata: Test262Metadata,
+ *   ) => readonly string[] | undefined,
+ *   reportFeaturesForPath?: (
  *     file: string,
  *     metadata: Test262Metadata,
  *   ) => readonly string[] | undefined,
@@ -252,6 +260,7 @@ export async function runTest262(options) {
     supportedFeatures: options.supportedFeatures,
     skipFeatures: options.skipFeatures,
     supportedFeaturesForPath: options.supportedFeaturesForPath,
+    reportFeaturesForPath: options.reportFeaturesForPath,
   });
 
   return {
@@ -349,6 +358,8 @@ export async function runTest262File(options) {
     ...(options.supportedFeatures ?? []),
     ...pathFeatures,
   ]);
+  const reportFeatures =
+    options.reportFeaturesForPath?.(file, metadata) ?? metadata.features;
   const skip = decideSkip(metadata, {
     supportedFeatures,
     skipFeatures: options.skipFeatures,
@@ -361,7 +372,7 @@ export async function runTest262File(options) {
         status: 'skipped',
         reason: skip.reason,
         message: skip.message,
-        features: metadata.features,
+        features: reportFeatures,
       }),
     ];
   }
@@ -378,6 +389,7 @@ export async function runTest262File(options) {
         file,
         source,
         metadata,
+        features: reportFeatures,
         variant,
         includes,
       }),
@@ -404,6 +416,7 @@ async function readPortableInclude(host, name) {
  *   file: string,
  *   source: string,
  *   metadata: Test262Metadata,
+ *   features: readonly string[],
  *   variant: Test262Variant,
  *   includes: readonly string[],
  * }} options
@@ -415,10 +428,10 @@ async function runVariant({
   file,
   source,
   metadata,
+  features,
   variant,
   includes,
 }) {
-  const features = metadata.features;
   /**
    * @param {string} reason
    * @param {string} message
@@ -444,6 +457,7 @@ async function runVariant({
       file,
       source,
       metadata,
+      features,
       variant,
       includes,
       realm,
@@ -457,6 +471,7 @@ async function runVariant({
       file,
       source,
       metadata,
+      features,
       variant,
       includes,
       realm,
@@ -538,6 +553,7 @@ async function runVariant({
  *   file: string,
  *   source: string,
  *   metadata: Test262Metadata,
+ *   features: readonly string[],
  *   variant: Test262Variant,
  *   includes: readonly string[],
  *   realm: any,
@@ -550,11 +566,11 @@ async function runModuleVariant({
   file,
   source,
   metadata,
+  features,
   variant,
   includes,
   realm,
 }) {
-  const features = metadata.features;
   /**
    * @param {string} reason
    * @param {string} message
@@ -754,6 +770,7 @@ function recordSynchronousOutcome({
  *   file: string,
  *   source: string,
  *   metadata: Test262Metadata,
+ *   features: readonly string[],
  *   variant: Test262Variant,
  *   includes: readonly string[],
  *   realm: any,
@@ -766,11 +783,11 @@ async function runAsyncVariant({
   file,
   source,
   metadata,
+  features,
   variant,
   includes,
   realm,
 }) {
-  const features = metadata.features;
   /**
    * @param {string} reason
    * @param {string} message

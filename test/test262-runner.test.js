@@ -160,6 +160,10 @@ function fixture(description, body, extra = '') {
  *     file: string,
  *     metadata: import('../tools/test262/metadata.js').Test262Metadata,
  *   ) => readonly string[] | undefined,
+ *   reportFeaturesForPath?: (
+ *     file: string,
+ *     metadata: import('../tools/test262/metadata.js').Test262Metadata,
+ *   ) => readonly string[] | undefined,
  * }} [options]
  * @returns {Promise<{ records: readonly any[], summary: any }>}
  */
@@ -171,6 +175,7 @@ function runMemorySuite(tests, options = {}) {
     supportedFeatures: options.supportedFeatures ?? [],
     skipFeatures: options.skipFeatures ?? [],
     supportedFeaturesForPath: options.supportedFeaturesForPath,
+    reportFeaturesForPath: options.reportFeaturesForPath,
   });
 }
 
@@ -1164,6 +1169,97 @@ export default [
 
       assertSame(records[0].status, 'passed');
       assertSame(JSON.stringify(records[0].features), '["fixture-subset"]');
+    },
+  },
+  {
+    name: 'report feature overrides change only target record presentation',
+    run: async () => {
+      const tests = {
+        'non-target.js': fixture(
+          'non-target source feature order',
+          'var value = 1;',
+          'flags: [noStrict]\nfeatures: [non-target-z, non-target-a]\n',
+        ),
+        'target-async.js': fixture(
+          'target async pass',
+          '$DONE();',
+          'flags: [async, noStrict]\nfeatures: [source-z, source-a]\n',
+        ),
+        'target-failed.js': fixture(
+          'target failure',
+          "throw 'report-only failure';",
+          'flags: [noStrict]\nfeatures: [source-z, source-a]\n',
+        ),
+        'target-module.js': fixture(
+          'target module pass',
+          'export const value = 1;',
+          'flags: [module, raw]\nfeatures: [source-z, source-a]\n',
+        ),
+        'target-passed.js': fixture(
+          'target script pass',
+          'var value = 1;',
+          'flags: [noStrict]\nfeatures: [source-z, source-a]\n',
+        ),
+        'target-skipped.js': fixture(
+          'target remains unsupported',
+          "throw 'must not run';",
+          'flags: [noStrict]\nfeatures: [unsupported-source]\n',
+        ),
+      };
+      const supportedFeatures = [
+        'non-target-a',
+        'non-target-z',
+        'source-a',
+        'source-z',
+      ];
+      const baseline = await runMemorySuite(tests, { supportedFeatures });
+      const reportFeatures = Object.freeze(['report-z', 'report-a']);
+      const overridden = await runMemorySuite(tests, {
+        supportedFeatures,
+        reportFeaturesForPath(file) {
+          return file.startsWith('target-') ? reportFeatures : undefined;
+        },
+      });
+      const withoutFeatures = (/** @type {any} */ record) => {
+        const value = { ...record };
+        Reflect.deleteProperty(value, 'features');
+        return value;
+      };
+
+      assertSame(
+        JSON.stringify(overridden.records.map(withoutFeatures)),
+        JSON.stringify(baseline.records.map(withoutFeatures)),
+      );
+      const byFile = new Map(
+        overridden.records.map((record) => [record.file, record]),
+      );
+      assertSame(byFile.get('target-passed.js')?.status, 'passed');
+      assertSame(byFile.get('target-module.js')?.status, 'passed');
+      assertSame(byFile.get('target-async.js')?.status, 'passed');
+      assertSame(byFile.get('target-failed.js')?.status, 'failed');
+      assertSame(
+        byFile.get('target-failed.js')?.message,
+        'guest string: report-only failure',
+      );
+      assertSame(byFile.get('target-skipped.js')?.status, 'skipped');
+      assertSame(
+        byFile.get('target-skipped.js')?.message,
+        'unsupported features: unsupported-source',
+      );
+      assertSame(
+        overridden.records
+          .filter((record) => record.file.startsWith('target-'))
+          .every(
+            (record) =>
+              JSON.stringify(record.features) ===
+              JSON.stringify(reportFeatures),
+          ),
+        true,
+      );
+      assertSame(
+        JSON.stringify(byFile.get('non-target.js')?.features),
+        '["non-target-z","non-target-a"]',
+      );
     },
   },
   {

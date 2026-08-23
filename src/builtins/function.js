@@ -23,7 +23,6 @@ import {
   NativeFunction,
   createListFromArrayLike,
   requireCallable,
-  requireObjectReceiver,
 } from './shared.js';
 
 /**
@@ -232,14 +231,7 @@ export function createFunctionIntrinsics(realm) {
       const callArguments =
         argumentArray === null || argumentArray === undefined
           ? []
-          : createListFromArrayLike(
-              requireObjectReceiver(
-                argumentArray,
-                'Function.prototype.apply arguments must be an object',
-              ),
-              {},
-              realm,
-            );
+          : createListFromArrayLike(argumentArray, realm);
       return callCallable(
         target,
         thisArgument,

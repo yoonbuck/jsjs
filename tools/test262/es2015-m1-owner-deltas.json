@@ -1,0 +1,62 @@
+[
+  {
+    "path": "test/built-ins/Reflect/defineProperty/return-abrupt-from-result.js",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "issue": 81
+  },
+  {
+    "path": "test/built-ins/Reflect/deleteProperty/return-abrupt-from-result.js",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "issue": 81
+  },
+  {
+    "path": "test/built-ins/Reflect/getOwnPropertyDescriptor/return-abrupt-from-result.js",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "issue": 81
+  },
+  {
+    "path": "test/built-ins/Reflect/getPrototypeOf/return-abrupt-from-result.js",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "issue": 81
+  },
+  {
+    "path": "test/built-ins/Reflect/has/return-abrupt-from-result.js",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "issue": 81
+  },
+  {
+    "path": "test/built-ins/Reflect/isExtensible/return-abrupt-from-result.js",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "issue": 81
+  },
+  {
+    "path": "test/built-ins/Reflect/ownKeys/return-abrupt-from-result.js",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "issue": 81
+  },
+  {
+    "path": "test/built-ins/Reflect/preventExtensions/return-abrupt-from-result.js",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "issue": 81
+  },
+  {
+    "path": "test/built-ins/Reflect/preventExtensions/return-boolean-from-proxy-object.js",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "issue": 81
+  },
+  {
+    "path": "test/built-ins/Reflect/setPrototypeOf/return-abrupt-from-result.js",
+    "status": "blocked:proxy-and-reflect-metaobject",
+    "blocker": "proxy-and-reflect-metaobject",
+    "issue": 81
+  }
+]

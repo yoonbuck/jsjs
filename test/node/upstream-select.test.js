@@ -44,6 +44,7 @@ import {
   parseUpstreamSubset,
   upstreamSubsetPaths,
 } from '../../tools/test262/upstream.js';
+import { createPromotionReportFeaturesForPath } from '../../tools/test262/promotion-report-features.js';
 
 const { structuredClone } = globalThis;
 const EXCLUDED_PATH = 'test/staging/not-read.js';
@@ -90,6 +91,81 @@ const PRE_PROMOTION_TAXONOMY_SHA256 =
   'ce05cbdf15ee3262651520f81ca7e904e021cd4dfcbb29d787b69b4f8f897e31';
 const PRE_PROMOTION_GROUPS_SHA256 =
   '064be556b3e98debaca2287097c2ab431283906df57a82dd5c6aba01227440f8';
+const M1_TRACKED_SOURCE_FEATURE_ORDER = Object.freeze({
+  'test/built-ins/Reflect/Symbol.toStringTag.js': Object.freeze([
+    'Symbol.toStringTag',
+    'Reflect',
+  ]),
+  'test/built-ins/Reflect/apply/arguments-list-is-not-array-like-but-still-valid.js':
+    Object.freeze(['Reflect', 'arrow-function', 'Symbol']),
+  'test/built-ins/Reflect/apply/arguments-list-is-not-array-like.js':
+    Object.freeze(['Reflect', 'arrow-function', 'Symbol']),
+  'test/built-ins/Reflect/apply/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/construct/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/defineProperty/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/deleteProperty/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/get/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/getOwnPropertyDescriptor/not-a-constructor.js':
+    Object.freeze(['Reflect.construct', 'Reflect', 'arrow-function']),
+  'test/built-ins/Reflect/getPrototypeOf/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/has/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/isExtensible/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/preventExtensions/not-a-constructor.js':
+    Object.freeze(['Reflect.construct', 'Reflect', 'arrow-function']),
+  'test/built-ins/Reflect/set/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'Reflect.set',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/setPrototypeOf/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'Reflect.setPrototypeOf',
+    'arrow-function',
+  ]),
+});
+const M1_REPORT_ORDER_DIVERGENT_PATHS = Object.freeze(
+  Object.keys(M1_TRACKED_SOURCE_FEATURE_ORDER),
+);
+const M1_REPORT_TRACKED_EVIDENCE_PATHS = Object.freeze([
+  'tools/test262/es2015-audit-evidence.json',
+  'tools/test262/es2015-h0-promotion.json',
+  'tools/test262/es2015-m1-promotion.json',
+  'tools/test262/es2015-promotion.json',
+]);
 const H0_PIN = Object.freeze({
   repository: 'https://github.com/tc39/test262.git',
   revision: 'b363f29d3c43c626dc852744ad64a0b48a003693',
@@ -106,6 +182,16 @@ const M0_PROMOTION = Object.freeze({
   variantCount: 0,
   entries: Object.freeze([]),
 });
+
+/** @param {string} path */
+async function readM1ReportEvidence(path) {
+  assertSame(
+    M1_REPORT_TRACKED_EVIDENCE_PATHS.includes(path),
+    true,
+    `M1 report-order test must use tracked evidence, not ${path}`,
+  );
+  return readFile(new URL(path, REPOSITORY_ROOT), 'utf8');
+}
 const H0_REASSIGNED_PATH = 'test/built-ins/Proxy/h0-failed.js';
 const H0_PASSED_PATH = 'test/language/h0-passed.js';
 const H0_PATHS = Object.freeze([H0_REASSIGNED_PATH, H0_PASSED_PATH]);
@@ -1149,15 +1235,35 @@ export default [
     },
   },
   {
-    name: 'ES2015 H0 compatibility authorization and merge APIs compose T0 and H0 promotions',
+    name: 'ES2015 promotion authorization and merge APIs compose T0, H0, and M1',
     run: () => {
+      const m1Path = 'test/language/m1-reflect.js';
       const t0Text = json({
         ...promotionFixture(),
         repository: H0_PIN.repository,
         revision: H0_PIN.revision,
       });
+      const m1Text = json({
+        groupName: 'es2015/m1-reflect',
+        version: 2,
+        repository: H0_PIN.repository,
+        revision: H0_PIN.revision,
+        sourceTaxonomySha256: '2'.repeat(64),
+        ledgerSha256: sha256(`${m1Path}\n`),
+        rootCount: 1,
+        variantCount: 2,
+        entries: [
+          {
+            path: m1Path,
+            variants: 2,
+            features: ['m1-feature'],
+            includeFeatures: ['m1-include-feature'],
+          },
+        ],
+      });
       const t0 = parseEs2015Promotion(t0Text);
       const h0 = parseEs2015Promotion(H0_PROMOTION_TEXT);
+      const m1 = parseEs2015Promotion(m1Text);
       const base = parseUpstreamSubset(
         json({
           version: 1,
@@ -1173,14 +1279,20 @@ export default [
         }),
       );
       const h0Only = mergePromotionSubset(base, h0);
-      const merged = mergePromotionSubsets(base, [t0, h0]);
+      const merged = mergePromotionSubsets(base, [t0, h0, m1]);
       const inventory = [
         ...promotionValidationOptions().inventory,
         H0_INVENTORY[1],
+        {
+          path: m1Path,
+          variants: 2,
+          metadata: { features: ['m1-feature'] },
+          includeFeatures: ['m1-include-feature'],
+        },
       ];
       const policy = {
-        es2015Features: ['cross-realm', 'exact-path-feature'],
-        neutralFeatures: ['include-path-feature'],
+        es2015Features: ['cross-realm', 'exact-path-feature', 'm1-feature'],
+        neutralFeatures: ['include-path-feature', 'm1-include-feature'],
         laterFeatures: ['later-path-feature'],
       };
       const h0Authorization = createEs2015PromotionAuthorization({
@@ -1191,7 +1303,7 @@ export default [
         inventory: [H0_INVENTORY[1]],
       });
       const authorizations = createEs2015PromotionAuthorizations({
-        promotionTexts: [t0Text, H0_PROMOTION_TEXT],
+        promotionTexts: [t0Text, H0_PROMOTION_TEXT, m1Text],
         pin: H0_PIN,
         policy,
         subset: merged,
@@ -1204,7 +1316,7 @@ export default [
       );
       assertSame(
         JSON.stringify(merged.groups.map((group) => group.name)),
-        '["baseline","es2015/audit-passing-promotion","es2015/h0-cross-realm-passed"]',
+        '["baseline","es2015/audit-passing-promotion","es2015/h0-cross-realm-passed","es2015/m1-reflect"]',
       );
       assertSame(
         JSON.stringify(
@@ -1225,6 +1337,16 @@ export default [
           authorizations(H0_PASSED_PATH, { features: ['cross-realm'] }),
         ),
         '["cross-realm"]',
+      );
+      assertSame(
+        JSON.stringify(authorizations(m1Path, { features: ['m1-feature'] })),
+        '["m1-feature","m1-include-feature"]',
+      );
+      assertSame(
+        JSON.stringify(
+          authorizations('test/language/base.js', { features: [] }),
+        ),
+        '[]',
       );
     },
   },
@@ -1413,22 +1535,28 @@ export default [
   {
     name: 'checked-in ES2015 promotions exactly match their durable ledgers and generated subset groups',
     run: async () => {
-      const [promotionText, h0PromotionText, subsetText] = await Promise.all([
-        readFile(
-          new URL('tools/test262/es2015-promotion.json', REPOSITORY_ROOT),
-          'utf8',
-        ),
-        readFile(
-          new URL('tools/test262/es2015-h0-promotion.json', REPOSITORY_ROOT),
-          'utf8',
-        ),
-        readFile(
-          new URL('tools/test262/upstream-subset.json', REPOSITORY_ROOT),
-          'utf8',
-        ),
-      ]);
+      const [promotionText, h0PromotionText, m1PromotionText, subsetText] =
+        await Promise.all([
+          readFile(
+            new URL('tools/test262/es2015-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/es2015-h0-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/es2015-m1-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/upstream-subset.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+        ]);
       const manifest = parseEs2015Promotion(promotionText);
       const h0Manifest = parseEs2015Promotion(h0PromotionText);
+      const m1Manifest = parseEs2015Promotion(m1PromotionText);
       const subset = parseUpstreamSubset(subsetText);
       const promotion = subset.groups.filter(
         (group) => group.name === 'es2015/audit-passing-promotion',
@@ -1436,13 +1564,18 @@ export default [
       const h0Promotion = subset.groups.filter(
         (group) => group.name === ES2015_H0_PROMOTION_GROUP,
       );
+      const m1Promotion = subset.groups.filter(
+        (group) => group.name === 'es2015/m1-reflect',
+      );
       const preExistingGroups = subset.groups.filter(
         (group) =>
           group.name !== 'es2015/audit-passing-promotion' &&
-          group.name !== ES2015_H0_PROMOTION_GROUP,
+          group.name !== ES2015_H0_PROMOTION_GROUP &&
+          group.name !== 'es2015/m1-reflect',
       );
       const paths = promotionPaths(manifest);
       const h0Paths = promotionPaths(h0Manifest);
+      const m1Paths = promotionPaths(m1Manifest);
 
       assertSame(manifest.rootCount, 6323);
       assertSame(manifest.variantCount, 11955);
@@ -1456,6 +1589,11 @@ export default [
         JSON.stringify(h0Promotion[0]?.paths),
         JSON.stringify(h0Paths),
       );
+      assertSame(m1Promotion.length, 1);
+      assertSame(
+        JSON.stringify(m1Promotion[0]?.paths),
+        JSON.stringify(m1Paths),
+      );
       assertSame(
         JSON.stringify(
           upstreamSubsetPaths(subset).filter((path) => paths.includes(path)),
@@ -1466,6 +1604,95 @@ export default [
       assertSame(
         sha256(JSON.stringify(preExistingGroups)),
         PRE_PROMOTION_GROUPS_SHA256,
+      );
+    },
+  },
+  {
+    name: 'upstream report feature authority is scoped to exact M1 roots',
+    run: async () => {
+      const createReportFeatures = createPromotionReportFeaturesForPath;
+      assertSame(typeof createReportFeatures, 'function');
+      if (typeof createReportFeatures !== 'function') return;
+      const [
+        promotionText,
+        h0PromotionText,
+        m1PromotionText,
+        auditEvidenceText,
+      ] = await Promise.all([
+        readM1ReportEvidence('tools/test262/es2015-promotion.json'),
+        readM1ReportEvidence('tools/test262/es2015-h0-promotion.json'),
+        readM1ReportEvidence('tools/test262/es2015-m1-promotion.json'),
+        readM1ReportEvidence('tools/test262/es2015-audit-evidence.json'),
+      ]);
+      const promotion = parseEs2015Promotion(promotionText);
+      const h0Promotion = parseEs2015Promotion(h0PromotionText);
+      const m1Promotion = parseEs2015Promotion(m1PromotionText);
+      const auditEvidence = JSON.parse(auditEvidenceText);
+      const reportFeaturesForPath = createReportFeatures(m1Promotion);
+      const m1Paths = new Set(m1Promotion.entries.map((entry) => entry.path));
+      const m1AuditRecords = auditEvidence.auditRecords.filter(
+        (/** @type {any} */ record) => m1Paths.has(record.file),
+      );
+
+      assertSame(m1Promotion.entries.length, 103);
+      assertSame(m1AuditRecords.length, 206);
+      for (const entry of m1Promotion.entries) {
+        assertSame(
+          JSON.stringify(reportFeaturesForPath(entry.path)),
+          JSON.stringify(entry.features),
+          `M1 report feature authority drifted for ${entry.path}`,
+        );
+        const records = m1AuditRecords.filter(
+          (/** @type {any} */ record) => record.file === entry.path,
+        );
+        assertSame(
+          JSON.stringify(
+            records.map((/** @type {any} */ record) => [
+              record.variant,
+              record.status,
+            ]),
+          ),
+          JSON.stringify([
+            ['non-strict', 'passed'],
+            ['strict', 'passed'],
+          ]),
+          `tracked M1 audit evidence drifted for ${entry.path}`,
+        );
+      }
+
+      const sourceFeaturesByPath = new Map(
+        Object.entries(M1_TRACKED_SOURCE_FEATURE_ORDER),
+      );
+      const divergent = [];
+      for (const entry of m1Promotion.entries) {
+        const sourceFeatures =
+          sourceFeaturesByPath.get(entry.path) ?? entry.features;
+        if (
+          JSON.stringify(reportFeaturesForPath(entry.path)) !==
+          JSON.stringify(sourceFeatures)
+        ) {
+          divergent.push(entry.path);
+        }
+      }
+      assertSame(
+        JSON.stringify(divergent),
+        JSON.stringify(M1_REPORT_ORDER_DIVERGENT_PATHS),
+      );
+      assertSame(
+        promotionPaths(promotion).every(
+          (path) => reportFeaturesForPath(path) === undefined,
+        ),
+        true,
+      );
+      assertSame(
+        promotionPaths(h0Promotion).every(
+          (path) => reportFeaturesForPath(path) === undefined,
+        ),
+        true,
+      );
+      assertSame(
+        reportFeaturesForPath('test/language/nonpromotion.js'),
+        undefined,
       );
     },
   },

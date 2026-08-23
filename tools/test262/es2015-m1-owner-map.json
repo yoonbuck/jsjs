@@ -1,0 +1,7 @@
+[
+  {
+    "status": "blocked",
+    "blocker": "proxy-and-reflect-metaobject",
+    "issue": 81
+  }
+]

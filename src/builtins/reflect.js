@@ -1,6 +1,16 @@
 import { EngineArray } from '../runtime/array-object.js';
+import { callCallable, constructCallable } from '../runtime/capabilities.js';
+import { GuestErrorSignal } from '../runtime/completion.js';
 import { EngineObject, defineOwnPropertyOrThrow } from '../runtime/object.js';
-import { requireObjectReceiver } from './shared.js';
+import { toPropertyKey } from '../runtime/conversion.js';
+import {
+  createListFromArrayLike,
+  fromPropertyDescriptor,
+  requireCallable,
+  requireConstructor,
+  requireObjectReceiver,
+  toPropertyDescriptor,
+} from './shared.js';
 
 /**
  * @typedef {import('../runtime/realm.js').Realm} Realm
@@ -8,40 +18,235 @@ import { requireObjectReceiver } from './shared.js';
 
 /**
  * @param {Realm} realm
- * @returns {{ reflectObject: EngineObject }}
+ * @param {EngineObject} target
+ * @param {string} name
+ * @param {number} length
+ * @param {import('./shared.js').NativeFunctionOptions['call']} call
+ * @returns {void}
  */
-export function createReflectIntrinsics(realm) {
-  const reflectObject = new EngineObject(realm.intrinsics.objectPrototype);
-  const ownKeys = realm.createNativeFunction({
-    name: 'ownKeys',
-    length: 1,
-    call(_thisValue, args) {
-      const target = requireObjectReceiver(
-        args[0],
-        'Reflect.ownKeys requires an object',
-      );
-      const keys = target.ownPropertyKeys();
-      const result = new EngineArray(realm.intrinsics.arrayPrototype);
-
-      for (let index = 0; index < keys.length; index += 1) {
-        defineOwnPropertyOrThrow(result, String(index), {
-          value: keys[index],
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        });
-      }
-
-      return result;
-    },
-  });
-
-  reflectObject.defineOwnProperty('ownKeys', {
-    value: ownKeys,
+function defineReflectMethod(realm, target, name, length, call) {
+  target.defineOwnProperty(name, {
+    value: realm.createNativeFunction({ name, length, call }),
     writable: true,
     enumerable: false,
     configurable: true,
   });
+}
+
+/**
+ * @param {Realm} realm
+ * @param {readonly unknown[]} values
+ * @returns {EngineArray}
+ */
+function createArrayFromList(realm, values) {
+  const result = new EngineArray(realm.intrinsics.arrayPrototype);
+
+  for (let index = 0; index < values.length; index += 1) {
+    defineOwnPropertyOrThrow(result, String(index), {
+      value: values[index],
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * @param {Realm} realm
+ * @returns {{ reflectObject: EngineObject }}
+ */
+export function createReflectIntrinsics(realm) {
+  const reflectObject = new EngineObject(realm.intrinsics.objectPrototype);
+
+  reflectObject.defineOwnProperty(realm.agent.wellKnownSymbols.toStringTag, {
+    value: 'Reflect',
+    writable: false,
+    enumerable: false,
+    configurable: true,
+  });
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'apply',
+    3,
+    (_this, args, _functionObject, callerRealm) => {
+      const target = requireCallable(
+        args[0],
+        'Reflect.apply target is not callable',
+      );
+      const argumentsList = createListFromArrayLike(args[2], realm);
+      return callCallable(target, args[1], argumentsList, callerRealm ?? realm);
+    },
+  );
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'construct',
+    2,
+    (_this, args, _functionObject, callerRealm) => {
+      const target = requireConstructor(
+        args[0],
+        'Reflect.construct target is not a constructor',
+      );
+      const newTarget =
+        args.length < 3
+          ? target
+          : requireConstructor(
+              args[2],
+              'Reflect.construct newTarget is not a constructor',
+            );
+      const argumentsList = createListFromArrayLike(args[1], realm);
+      return constructCallable(
+        target,
+        argumentsList,
+        newTarget,
+        callerRealm ?? realm,
+      );
+    },
+  );
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'defineProperty',
+    3,
+    (_this, args) => {
+      const target = requireObjectReceiver(
+        args[0],
+        'Reflect.defineProperty requires an object',
+      );
+      const key = toPropertyKey(args[1], realm);
+      const descriptor = toPropertyDescriptor(args[2]);
+      return target.defineOwnProperty(key, descriptor);
+    },
+  );
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'deleteProperty',
+    2,
+    (_this, args) => {
+      const target = requireObjectReceiver(
+        args[0],
+        'Reflect.deleteProperty requires an object',
+      );
+      return target.delete(toPropertyKey(args[1], realm));
+    },
+  );
+
+  defineReflectMethod(realm, reflectObject, 'get', 2, (_this, args) => {
+    const target = requireObjectReceiver(
+      args[0],
+      'Reflect.get requires an object',
+    );
+    const key = toPropertyKey(args[1], realm);
+    const receiver = args.length < 3 ? target : args[2];
+    return target.get(key, receiver);
+  });
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'getOwnPropertyDescriptor',
+    2,
+    (_this, args) => {
+      const target = requireObjectReceiver(
+        args[0],
+        'Reflect.getOwnPropertyDescriptor requires an object',
+      );
+      return fromPropertyDescriptor(
+        realm,
+        target.getOwnProperty(toPropertyKey(args[1], realm)),
+      );
+    },
+  );
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'getPrototypeOf',
+    1,
+    (_this, args) =>
+      requireObjectReceiver(
+        args[0],
+        'Reflect.getPrototypeOf requires an object',
+      ).getPrototypeOf(),
+  );
+
+  defineReflectMethod(realm, reflectObject, 'has', 2, (_this, args) => {
+    const target = requireObjectReceiver(
+      args[0],
+      'Reflect.has requires an object',
+    );
+    return target.hasProperty(toPropertyKey(args[1], realm));
+  });
+
+  defineReflectMethod(realm, reflectObject, 'isExtensible', 1, (_this, args) =>
+    requireObjectReceiver(
+      args[0],
+      'Reflect.isExtensible requires an object',
+    ).isExtensible(),
+  );
+
+  defineReflectMethod(realm, reflectObject, 'ownKeys', 1, (_this, args) =>
+    createArrayFromList(
+      realm,
+      requireObjectReceiver(
+        args[0],
+        'Reflect.ownKeys requires an object',
+      ).ownPropertyKeys(),
+    ),
+  );
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'preventExtensions',
+    1,
+    (_this, args) =>
+      requireObjectReceiver(
+        args[0],
+        'Reflect.preventExtensions requires an object',
+      ).preventExtensions(),
+  );
+
+  defineReflectMethod(realm, reflectObject, 'set', 3, (_this, args) => {
+    const target = requireObjectReceiver(
+      args[0],
+      'Reflect.set requires an object',
+    );
+    const key = toPropertyKey(args[1], realm);
+    const receiver = args.length < 4 ? target : args[3];
+    return target.set(key, args[2], receiver);
+  });
+
+  defineReflectMethod(
+    realm,
+    reflectObject,
+    'setPrototypeOf',
+    2,
+    (_this, args) => {
+      const target = requireObjectReceiver(
+        args[0],
+        'Reflect.setPrototypeOf requires an object',
+      );
+      const prototype = args[1];
+
+      if (prototype !== null && !(prototype instanceof EngineObject)) {
+        throw new GuestErrorSignal(
+          'TypeError',
+          'Reflect.setPrototypeOf prototype must be an object or null',
+        );
+      }
+
+      return target.setPrototypeOf(prototype);
+    },
+  );
 
   return { reflectObject };
 }

@@ -64,6 +64,7 @@ import objectBuiltins from './object-builtins.test.js';
 import functionBuiltins from './function-builtins.test.js';
 import arrayBuiltins from './array-builtins.test.js';
 import primitiveWrappers from './primitive-wrappers.test.js';
+import reflect from './reflect.test.js';
 import symbols from './symbols.test.js';
 import booleanBuiltins from './boolean-builtins.test.js';
 import numberBuiltins from './number-builtins.test.js';
@@ -273,6 +274,7 @@ export const PORTABLE_SUITES = Object.freeze([
     file: 'test/primitive-wrappers.test.js',
     tests: primitiveWrappers,
   }),
+  Object.freeze({ file: 'test/reflect.test.js', tests: reflect }),
   Object.freeze({
     file: 'test/symbols.test.js',
     tests: symbols,
