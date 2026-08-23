@@ -43,20 +43,21 @@ The exact audit found:
    catch parameters, catch binding initialization, and catch parameter/body
    environment separation.
 3. The current taxonomy contains **one additional post-ledger root / two
-   variants**, exposed by H0: a `GlobalDeclarationInstantiation` interaction
-   with configurable global bindings created by non-strict eval.
+   variants**, exposed by H0. Its expected sloppy-mode behavior comes from the
+   ES2025 removal of global `[[VarNames]]`/`HasVarDeclaration`, not from the
+   Sixth Edition.
 
 The immutable 482-root ledger therefore partitions into five disjoint movement
 children. The current 483-root selector adds a sixth:
 
-| Code | Delivery          | Disposition or implementation scope                                                | Roots | Variants | Ledger SHA-256                                                     |
-| ---- | ----------------- | ---------------------------------------------------------------------------------- | ----: | -------: | ------------------------------------------------------------------ |
-| P1R  | atomic taxonomy   | ES2016 `BindingRestElement : ... BindingPattern` contamination                     |   250 |      486 | `de2f75fa7dcf68a8eb00298ce05d6f2be70ffaf7efc3bec4b752ae6b2a4508ab` |
-| P1T  | atomic taxonomy   | ES2017 trailing commas in formal parameters and calls                              |   115 |      230 | `639c946d678180f5be0b2c405c179c1c173694967cef79f25081d773ce084f68` |
-| P1A  | atomic taxonomy   | async function, `await`, async generator, and async-context grammar                |    16 |       32 | `4038da176a6b33400cba6b2524d5bf3b6d826a45ce857a7d91535c0a6bb27c88` |
-| P1X  | atomic taxonomy   | other post-ES2015 syntax dependencies                                              |    20 |       40 | `6f1acdea5f89beb9eccb2eb421002e28fbec13b6d319db1f0455fdc175db0274` |
-| P1C  | atomic production | ES2015 catch parameter binding and environment semantics                           |    81 |      161 | `e40f2a9c1dcd2aeb2cb56c4e3147a49d8d15275724abe002589dbbac05cb65d5` |
-| P1G  | atomic production | eval-created global var/function bindings versus later script lexical declarations |     1 |        2 | `80c9e4c41001ea0382bea315dab951927f670b5c9c32ba2db7dea6e509bd1aee` |
+| Code | Delivery          | Disposition or implementation scope                                 | Depends on | Roots | Variants | Ledger SHA-256                                                     |
+| ---- | ----------------- | ------------------------------------------------------------------- | ---------- | ----: | -------: | ------------------------------------------------------------------ |
+| P1R  | atomic taxonomy   | ES2016 `BindingRestElement : ... BindingPattern` contamination      | P1F        |   250 |      486 | `de2f75fa7dcf68a8eb00298ce05d6f2be70ffaf7efc3bec4b752ae6b2a4508ab` |
+| P1T  | atomic taxonomy   | ES2017 trailing commas in formal parameters and calls               | P1F        |   115 |      230 | `639c946d678180f5be0b2c405c179c1c173694967cef79f25081d773ce084f68` |
+| P1A  | atomic taxonomy   | async function, `await`, async generator, and async-context grammar | P1F        |    16 |       32 | `4038da176a6b33400cba6b2524d5bf3b6d826a45ce857a7d91535c0a6bb27c88` |
+| P1X  | atomic taxonomy   | other post-ES2015 syntax dependencies                               | P1F        |    20 |       40 | `6f1acdea5f89beb9eccb2eb421002e28fbec13b6d319db1f0455fdc175db0274` |
+| P1C  | atomic production | ES2015 catch parameter binding and environment semantics            | —          |    81 |      161 | `e40f2a9c1dcd2aeb2cb56c4e3147a49d8d15275724abe002589dbbac05cb65d5` |
+| P1G  | atomic taxonomy   | ES2025 global `[[VarNames]]`/`HasVarDeclaration` removal            | P1F        |     1 |        2 | `80c9e4c41001ea0382bea315dab951927f670b5c9c32ba2db7dea6e509bd1aee` |
 
 P1R/P1T/P1A/P1X/P1C are pairwise disjoint and reconstruct the original
 482-root ledger byte-for-byte. Adding P1G reconstructs the current 483-root
@@ -64,7 +65,7 @@ selector byte-for-byte.
 
 The selected hierarchy also needs one zero-movement tooling child, P1F, because
 the current generic roadmap-authority projection deliberately preserves a
-root's partition and therefore cannot move a reviewed core root to
+root's partition and therefore cannot move the 402 reviewed core roots to
 `later-or-non-es2015`.
 
 ## Verified inputs and stale state
@@ -131,6 +132,10 @@ Identifier 'test262Var' has already been declared
 ```
 
 The strict variant passes.
+
+Classification is root-granular. The passing strict variant does not keep the
+root in core when the same root's non-strict executable variant requires
+ES2025 semantics.
 
 ### Stale issue text and comments
 
@@ -299,22 +304,28 @@ their filenames do not say `async`.
 P1X is deliberately small. It must retain per-root reasons rather than using
 one broad path rule.
 
-### Runtime aggregate
+### Current later-semantics aggregate
 
-The immutable-ledger runtime ledger is P1C:
+Adding P1G to the parser/static disposition gives the complete current
+later/non-ES2015 movement ledger:
+
+```text
+402 roots
+790 variants
+sha256 86c5db7f039216edd97c21dd2a116d179e44b3729b8ca3235cb6d805e71ae7d8
+```
+
+P1G is semantic rather than grammatical, so it is not part of the 401-root
+parser/static aggregate.
+
+### Runtime production aggregate
+
+The only production runtime ledger is P1C:
 
 ```text
 81 roots
 161 variants
 sha256 e40f2a9c1dcd2aeb2cb56c4e3147a49d8d15275724abe002589dbbac05cb65d5
-```
-
-The current runtime ledger adds P1G:
-
-```text
-82 roots
-163 variants
-sha256 0951d1305e59387afbf62ed9b69972235d0fea341ce829a7f811cd218ce10bfd
 ```
 
 P1C contains:
@@ -324,7 +335,8 @@ P1C contains:
 | Catch destructuring binding            |    78 |      156 |
 | Catch parameter/body environment scope |     3 |        5 |
 
-P1G contains one root / two variants.
+P1G contains one root / two variants, but it is a taxonomy movement rather
+than production runtime work.
 
 ## Current architecture
 
@@ -391,15 +403,35 @@ HasLexicalDeclaration(name)
 HasRestrictedGlobalProperty(name)
 ```
 
-For an ordinary script `var`, the non-configurable global property is already
-restricted. For a non-strict eval-created global `var` or function, the
-property is configurable and must not prevent a later independent script from
-declaring `let` or `const` of the same name. The extra
-`HasVarDeclaration(name)` test creates P1G's failure.
+That behavior is correct for core ES2015. The Sixth Edition requires the
+`HasVarDeclaration(name)` rejection even when the prior global var/function
+binding came from non-strict eval and its object property is configurable.
+Every published edition from the Sixth through the Fifteenth retains that
+check, including ES2020.
 
-P1G should correct that distinction without weakening restricted-property,
-same-script early-error, global lexical, non-extensible-global, or atomic
-preflight behavior.
+The normative change is
+[tc39/ecma262#3226](https://github.com/tc39/ecma262/pull/3226),
+`Normative: Remove [[VarNames]] from the global`, merged as
+`ed75310080684f63a3f3fe10a286f5d0b5fbb9e3` on 2025-02-27. It removes the
+Global Environment Record `[[VarNames]]` slot, removes
+`HasVarDeclaration`, and deletes the corresponding
+`GlobalDeclarationInstantiation` rejection.
+
+The exact edition boundary is:
+
+| Edition                        | Source SHA-256                                                     | P1G behavior                                      |
+| ------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------- |
+| ECMA-262 15th Edition / ES2024 | `eabb3c1fc6c5b0610b143ef7bea8de7c0f323a777d669a453e47c39a2986c846` | retains `env.HasVarDeclaration(name)` and rejects |
+| ECMA-262 16th Edition / ES2025 | `6a28f9423133ed7b7c59a40baf620c2740f12f0bc9c251042f2a85b9cc5ed713` | removes the check and accepts                     |
+
+Pinned Test262 commit
+`c5a80993cd96623a875dd6fa532c7d92f392f02b` expanded the earlier strict-only
+test on 2024-04-08 with the message `Allow global var-via-eval be declared`
+and linked the then-draft normative PR. The pinned test therefore intentionally
+tests later semantics against a Sixth Edition roadmap.
+
+P1G must move to `later-or-non-es2015`; changing
+`globalDeclarationInstantiation` would regress the requested ES2015 contract.
 
 ### Function declaration instantiation
 
@@ -429,8 +461,9 @@ indirect, strict, and non-strict eval.
 - Annex B block-function aliases; and
 - catch-environment exceptions.
 
-P1G is the global script consumer of those configurable bindings, not a broad
-eval rewrite.
+Those configurable eval bindings are observable in ES2015, but the permission
+for a later independent script lexical declaration to reuse their names is an
+ES2025 change.
 
 ### Block declaration instantiation
 
@@ -484,11 +517,12 @@ P1C should establish one semantic contract for both evaluator paths:
 | Area            | Disposition                                                                                                                                                                   |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | P1R/P1T/P1A/P1X | Taxonomy/provenance work under #78. They are not guest parser work and have no mandatory ES2015 semantic owner after movement.                                                |
+| P1G             | Taxonomy/provenance work under #78 for an ES2025 normative semantic change. It is not a G0 or eval implementation child.                                                      |
 | #74 / T0        | Supplies the deterministic taxonomy architecture, but is closed and should not be reopened.                                                                                   |
 | #75 / T1        | Supplies reviewed-decision patterns, but its immutable 2,312-root unknown ledger cannot absorb P1 roots. P1F may reuse its record concepts without mutating T1's base ledger. |
 | #77 / P0        | Closed. Its design explicitly excludes later grammar widening. The 401 roots must not be returned to P0.                                                                      |
-| #96 / G0        | Downstream language-runtime grouping. Catch binding and global declaration instantiation remain P1 prerequisites, so G0 is not the primary owner.                             |
-| #76 / H0        | Closed. H0 made P1G executable and explicitly reassigned it to P1; H0 does not own the semantic fix.                                                                          |
+| #96 / G0        | Downstream language-runtime grouping. Catch binding remains a P1 prerequisite, so G0 is not the primary owner.                                                                |
+| #76 / H0        | Closed. H0 made P1G executable and reassigned it to P1 before its ES2025 provenance was reviewed. H0 does not own the later-semantics movement.                               |
 | #66 / modules   | Closed module capability/early-error owner; P1 has no module root.                                                                                                            |
 | #99 / Annex B   | The focused ledger excludes Annex B. P1C must preserve the existing Annex B.3.5 catch/eval exception without claiming Annex B completion.                                     |
 
@@ -500,23 +534,24 @@ core denominator before semantic-owner assignment.
 
 ### Selected: evidence correction plus two semantic kernels
 
-Use a small authority foundation, four exact later-dependency decision batches,
-and two production children. This keeps every root in one review scope, avoids
-later syntax implementation, and leaves catch/global changes independently
+Use a small authority foundation, five exact later-dependency decision batches,
+and one production child. This keeps every root in one review scope, avoids
+later syntax/semantics implementation, and leaves the catch kernel independently
 reviewable.
 
 ### Rejected: one parser/static production child
 
 It would either implement post-ES2015 syntax or mix taxonomy correction with
-unrelated catch/global runtime behavior. The exact audit provides no non-empty
-ES2015 parser/static implementation ledger.
+unrelated catch runtime behavior and P1G's later-semantic disposition. The
+exact audit provides no non-empty ES2015 parser/static implementation ledger.
 
-### Rejected: implement all 482 roots as written
+### Rejected: implement every current P1 root as written
 
-That would add ES2016 through ES2021 grammar and change the release claim from
-core ES2015 without a roadmap decision.
+That would add ES2016 through ES2021 grammar plus ES2025 global-environment
+semantics and change the release claim from core ES2015 without a roadmap
+decision.
 
-### Rejected: route the 401 roots through T1
+### Rejected: route the 402 roots through T1
 
 T1's base ledger, batch hashes, decisions, profiles, and closure proof are
 immutable and cover only roots whose prior class was `unknown-edition`.
@@ -537,7 +572,7 @@ foreign roots. Exact reviewed decisions are required.
 |- P1A  async/await grammar decisions (atomic taxonomy; blocked by P1F)
 |- P1X  remaining later-syntax decisions (atomic taxonomy; blocked by P1F)
 |- P1C  catch binding and environment semantics (atomic production)
-`- P1G  global declaration/eval binding semantics (atomic production)
+`- P1G  ES2025 global-eval semantics decision (atomic taxonomy; blocked by P1F)
 ```
 
 P1F has no path ownership and does not participate in the 482-root partition.
@@ -564,7 +599,7 @@ against stale bases.
 - Permit core-to-`later-or-non-es2015` movement only with exact later normative
   evidence.
 - Preserve foreign classifications and balanced whole-tree summaries.
-- Add preparation/consumer range validation for P1R/P1T/P1A/P1X.
+- Add preparation/consumer range validation for P1R/P1T/P1A/P1X/P1G.
 
 **Non-goals**
 
@@ -577,10 +612,12 @@ against stale bases.
 
 **Focused identity**
 
-The foundation guards, but does not consume, the exact 401-root union:
+The foundation guards, but does not consume, the exact 402-root current
+later-semantics union:
 
 ```text
-sha256 bbcec54ddf9556885372c20c690b104ee89de7df37f80eb1cf12d94ee3a3cf6b
+402 roots / 790 variants
+sha256 86c5db7f039216edd97c21dd2a116d179e44b3729b8ca3235cb6d805e71ae7d8
 ```
 
 **Acceptance**
@@ -797,9 +834,9 @@ source is valid Sixth Edition grammar
 - Node, Chromium, JavaScriptCore, focused Test262, exact-head CI, and CodeQL
   are clean.
 
-### P1G — Global declaration instantiation after eval
+### P1G — ES2025 global environment semantics disposition
 
-**Proposed title:** `Correct global lexical declarations after eval-created vars`
+**Proposed title:** `Reclassify ES2025 global eval redeclaration semantics out of P1`
 
 **Ledger**
 
@@ -811,36 +848,39 @@ sha256 80c9e4c41001ea0382bea315dab951927f670b5c9c32ba2db7dea6e509bd1aee
 **Focused query**
 
 ```text
-path === "test/language/global-code/script-decl-lex-var-declared-via-eval.js"
+path === "test/language/global-code/script-decl-lex-var-declared-via-eval.js" &&
+reviewed final partition === "later-or-non-es2015" &&
+reviewed normative dependency === ES2025 global [[VarNames]] removal
 ```
 
 **Scope**
 
-- Distinguish configurable global var/function bindings created by non-strict
-  eval from non-configurable script-level global declarations.
-- Align global lexical preflight with `HasLexicalDeclaration` and
-  `HasRestrictedGlobalProperty`.
-- Preserve all-or-nothing global instantiation.
-- Add direct portable probes for eval-created var and function bindings,
-  ordinary script var/function restrictions, strict eval non-leakage, and
-  Realm-owned errors.
+- Record exact prior classification and source/metadata closure.
+- Cite the ES2024 rejecting algorithm, ES2025 accepting algorithm, normative
+  PR #3226, and pinned Test262 update.
+- Move the exact root to `later-or-non-es2015`.
+- Use P1G as the first small consumer proof for P1F's partition-changing
+  authority path before the larger decision batches.
 
 **Non-goals**
 
-- No `$262` redesign.
-- No broad global environment refactor.
-- No Annex B expansion.
-- No unrelated eval or lexical-declaration changes.
+- No `src/**` change.
+- Do not remove `GlobalEnvironmentRecord.varNames`,
+  `HasVarDeclaration`, or the ES2015 preflight check.
+- No `$262`, eval, global environment, or lexical-declaration behavior change.
+- No claim that the pinned Test262 expectation is Sixth Edition behavior.
 
 **Acceptance**
 
-- Both exact variants pass.
-- Ordinary script-level non-configurable var/function collisions still reject
-  later lexical declarations.
-- Configurable non-strict eval bindings permit later independent script
-  lexical declarations.
-- Strict eval bindings do not leak.
-- Exact taxonomy movement covers P1G only, with portable and CI gates clean.
+- Exact Sixteenth Edition normative evidence and exact Fifteenth Edition
+  counter-evidence are recorded.
+- The decision explains that Editions 6-15, including ES2020, retain
+  `HasVarDeclaration`.
+- P1 decreases by exactly 1/2; core decreases and later increases by exactly
+  1/2.
+- No guest behavior or selected-subset change.
+- Exact taxonomy/provenance, CI, CodeQL, and independent specification review
+  are clean.
 
 ## Sequencing
 
@@ -849,10 +889,9 @@ Recommended merge order:
 1. **P1C** — highest-leverage implementable semantic child: 81 roots / 161
    variants, one parser/runtime seam, and an existing generator-side
    implementation to align with.
-2. **P1G** — close the one H0-exposed current delta while its evidence is
-   fresh.
-3. **P1F** — install partition-changing reviewed-decision support without
+2. **P1F** — install partition-changing reviewed-decision support without
    moving classifications.
+3. **P1G** — prove the new path on the one-root ES2025 semantic delta.
 4. **P1R** — remove the largest false attribution.
 5. **P1T**.
 6. **P1A**.
@@ -868,19 +907,19 @@ permission to combine child scopes. Rebase and regenerate after every merge.
 
 ## Projected accounting
 
-If all four reviewed later-dependency batches move exactly as designed:
+If all five reviewed later-dependency batches move exactly as designed:
 
 ```text
-P1:                       483/951 -> 82/163
-core partition:      24,250/46,424 -> 23,849/45,636
-later partition:     26,172/51,242 -> 26,573/52,030
+P1:                       483/951 -> 81/161
+core partition:      24,250/46,424 -> 23,848/45,634
+later partition:     26,172/51,242 -> 26,574/52,032
 ```
 
-If P1C and P1G then both pass and are promoted:
+If P1C then passes and is promoted:
 
 ```text
-P1:                    82/163 -> 0/0
-selected-passing: 19,768/37,631 -> 19,850/37,794
+P1:                    81/161 -> 0/0
+selected-passing: 19,768/37,631 -> 19,849/37,792
 ```
 
 The whole pinned tree remains 53,575 roots / 102,912 variants.
@@ -899,8 +938,8 @@ After child issue creation, #78 should:
 4. state that #76 and #77 are closed resolved history;
 5. replace generic parser/static/runtime wording with the named P1F/P1R/P1T/
    P1A/P1X/P1C/P1G hierarchy;
-6. state explicitly that P1R/P1T/P1A/P1X are taxonomy-only and prohibit guest
-   implementation;
+6. state explicitly that P1R/P1T/P1A/P1X/P1G are taxonomy-only and prohibit
+   guest implementation;
 7. add exact child counts, hashes, native relationships, and sequencing;
 8. retain the sentence that #78 owns no production commit; and
 9. update parent #70's current-main identity, counts, and P1 row.
@@ -918,10 +957,10 @@ Do not delete old dependency comments or silently rewrite the historical base.
 4. every pair of child ledgers is disjoint;
 5. the union of all movement children reconstructs the current source selector
    used for the final reclassification;
-6. all 401 later-dependent roots have independent normative review and are no
+6. all 402 later-dependent roots have independent normative review and are no
    longer in the core partition;
-7. P1C and P1G are selected-passing, or any different destination has new
-   exact reviewed evidence rather than silent scope expansion;
+7. P1C is selected-passing, or any different destination has new exact
+   reviewed evidence rather than silent scope expansion;
 8. the live P1 selector is zero;
 9. whole-tree root and variant balances are exact;
 10. downstream #70, #96, #98, and #100 dependency/count text is refreshed;
@@ -931,7 +970,7 @@ Do not delete old dependency comments or silently rewrite the historical base.
 
 ## Risks and required review attention
 
-1. **Denominator correction is material.** Moving 401 roots / 788 variants
+1. **Denominator correction is material.** Moving 402 roots / 790 variants
    changes the published core and later partitions. Independent specification
    and taxonomy review is mandatory.
 2. **Parser-version probing is not normative proof.** It only located the
@@ -947,9 +986,9 @@ Do not delete old dependency comments or silently rewrite the historical base.
    has pattern initialization while the synchronous evaluator does not; the
    parser gate hides both. P1C must prove parity rather than copying code
    blindly.
-6. **P1G's current comments encode the defect.** The implementation commentary
-   says global lexical names conflict with existing global vars. The child must
-   correct documentation together with behavior.
+6. **P1G is a deliberate edition conflict.** The engine comments and behavior
+   encode the Sixth Edition rule, while pinned Test262 encodes ES2025. Do not
+   treat that disagreement as an implementation defect.
 7. **Main may move before child creation.** The hashes in this design are exact
    for `215e5ff`. Any intervening taxonomy movement requires a fresh current
    selector while preserving the immutable 482-root reconciliation.
@@ -959,7 +998,7 @@ Do not delete old dependency comments or silently rewrite the historical base.
 The local ignored evidence includes:
 
 - reconstructed issue and current selector ledgers;
-- the six child ledgers and parser/runtime aggregate ledgers;
+- the six child ledgers and parser/later/runtime aggregate ledgers;
 - per-root Test262 metadata, source hashes, minimum-parser-edition diagnostics,
   current taxonomy records, and disposition reasons;
 - the 949-variant focused execution report;
