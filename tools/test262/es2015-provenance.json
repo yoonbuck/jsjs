@@ -14962,6 +14962,137 @@
       ]
     },
     {
+      "code": "M1",
+      "issue": 80,
+      "parentIssue": 70,
+      "state": "pending",
+      "source": {
+        "baseTaxonomySha256": "7d366c58f83e635cfe92993f67bab9d6e4d7ef49184cdc7b85b96180cdaf89a4",
+        "rootCount": 113,
+        "variantCount": 226,
+        "pathSha256": "65529ed8f9bdf88576314e95f4f164ac2c613e9ec44f0aae042a79aa5f8706b4",
+        "entryLedgerSha256": null
+      },
+      "reconciliation": null,
+      "evidence": [
+        {
+          "path": "tools/test262/es2015-m1-baseline.json",
+          "sha256": "9e44f5b504ffe8fa09089eb2a9f22c82ac79cb247c5b6315c4c1b176cb78a786"
+        },
+        {
+          "path": "tools/test262/es2015-m1-disposition.json",
+          "sha256": "102e9a9aa5a255592db0901b1af1167cd73a32fea4fef250f881dc343fe0e0d4"
+        },
+        {
+          "path": "tools/test262/es2015-m1-owner-deltas.json",
+          "sha256": "0156edb8e494938056d7002332440c097b3f4629af0b43089f62dfbbdeebef92"
+        },
+        {
+          "path": "tools/test262/es2015-m1-owner-map.json",
+          "sha256": "609a35a06345c3eee8ccd3b32e7f50cb39ce5176075ee3eec91833dca3803eb0"
+        },
+        {
+          "path": "tools/test262/es2015-m1-paths.json",
+          "sha256": "caee86527252106b5ff797b24ca0e41f265aec481a85c8c341d3487f13ab6c34"
+        },
+        {
+          "path": "tools/test262/es2015-m1-promotion.json",
+          "sha256": "e123e6004eb71e9f3c012432af514e2f5385f049c3b0b0792c6c84f6d8f99cd6"
+        }
+      ],
+      "protectedOutputs": [
+        {
+          "path": "docs/conformance.md",
+          "operation": "project",
+          "baseSha256": "b334793aba47b475dd0f8090e6da9f73c0b2b0c75964e5562995f6deb144a7c2",
+          "headSha256": null,
+          "projectionSha256": "d00433813b4b90005ea5b563c79f41af8f05d6ec4f87e8617c04a1ab4ba47a99"
+        },
+        {
+          "path": "docs/test262-report.jsonl",
+          "operation": "project",
+          "baseSha256": "21db3f9e84a17c79389945b879a6359b8a661a35a8b06a947322f53e2b6440cd",
+          "headSha256": null,
+          "projectionSha256": "ce81820dfe5a47bf54aa965d2f3d9241375b02914e038b0c111d0e3178f917da"
+        },
+        {
+          "path": "tools/test262/es2015-audit-evidence.json",
+          "operation": "replace-exact",
+          "baseSha256": "dce8672a50cb33c782951cf12bd8d6104a066bebe5eb355e10889bd445cacee8",
+          "headSha256": "eabaeb8245a6988443d91b21219c9e7919ec22639d6e8515a8dadbe5ddfc217f",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-m1-baseline.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "9e44f5b504ffe8fa09089eb2a9f22c82ac79cb247c5b6315c4c1b176cb78a786",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-m1-disposition.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "102e9a9aa5a255592db0901b1af1167cd73a32fea4fef250f881dc343fe0e0d4",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-m1-owner-deltas.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "0156edb8e494938056d7002332440c097b3f4629af0b43089f62dfbbdeebef92",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-m1-owner-map.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "609a35a06345c3eee8ccd3b32e7f50cb39ce5176075ee3eec91833dca3803eb0",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-m1-paths.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "caee86527252106b5ff797b24ca0e41f265aec481a85c8c341d3487f13ab6c34",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-m1-promotion.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "e123e6004eb71e9f3c012432af514e2f5385f049c3b0b0792c6c84f6d8f99cd6",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-taxonomy.json",
+          "operation": "project",
+          "baseSha256": "7d366c58f83e635cfe92993f67bab9d6e4d7ef49184cdc7b85b96180cdaf89a4",
+          "headSha256": null,
+          "projectionSha256": "732939567e7271d02f6cb5f1248e818ed43823609f9cd66fd9c6b5ef93039912"
+        },
+        {
+          "path": "tools/test262/upstream-subset.json",
+          "operation": "project",
+          "baseSha256": "f7840957b181a3497eb3bb0eac349f08e54b7dd075276088652295fba1778a2b",
+          "headSha256": null,
+          "projectionSha256": "2df51a8d8d51aa6c4ad44bcc234b7d9b2b8c7287b5189797f91c9ea8881e9e37"
+        }
+      ],
+      "destinations": [
+        {
+          "status": "blocked",
+          "blocker": "proxy-and-reflect-metaobject",
+          "issue": 81
+        },
+        {
+          "status": "selected-passing",
+          "blocker": null,
+          "issue": 80
+        }
+      ]
+    },
+    {
       "code": "P0",
       "issue": 77,
       "parentIssue": 70,
