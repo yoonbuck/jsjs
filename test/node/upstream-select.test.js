@@ -91,22 +91,80 @@ const PRE_PROMOTION_TAXONOMY_SHA256 =
   'ce05cbdf15ee3262651520f81ca7e904e021cd4dfcbb29d787b69b4f8f897e31';
 const PRE_PROMOTION_GROUPS_SHA256 =
   '064be556b3e98debaca2287097c2ab431283906df57a82dd5c6aba01227440f8';
-const M1_REPORT_ORDER_DIVERGENT_PATHS = Object.freeze([
-  'test/built-ins/Reflect/Symbol.toStringTag.js',
-  'test/built-ins/Reflect/apply/arguments-list-is-not-array-like-but-still-valid.js',
-  'test/built-ins/Reflect/apply/arguments-list-is-not-array-like.js',
-  'test/built-ins/Reflect/apply/not-a-constructor.js',
-  'test/built-ins/Reflect/construct/not-a-constructor.js',
-  'test/built-ins/Reflect/defineProperty/not-a-constructor.js',
-  'test/built-ins/Reflect/deleteProperty/not-a-constructor.js',
-  'test/built-ins/Reflect/get/not-a-constructor.js',
-  'test/built-ins/Reflect/getOwnPropertyDescriptor/not-a-constructor.js',
-  'test/built-ins/Reflect/getPrototypeOf/not-a-constructor.js',
-  'test/built-ins/Reflect/has/not-a-constructor.js',
-  'test/built-ins/Reflect/isExtensible/not-a-constructor.js',
-  'test/built-ins/Reflect/preventExtensions/not-a-constructor.js',
-  'test/built-ins/Reflect/set/not-a-constructor.js',
-  'test/built-ins/Reflect/setPrototypeOf/not-a-constructor.js',
+const M1_TRACKED_SOURCE_FEATURE_ORDER = Object.freeze({
+  'test/built-ins/Reflect/Symbol.toStringTag.js': Object.freeze([
+    'Symbol.toStringTag',
+    'Reflect',
+  ]),
+  'test/built-ins/Reflect/apply/arguments-list-is-not-array-like-but-still-valid.js':
+    Object.freeze(['Reflect', 'arrow-function', 'Symbol']),
+  'test/built-ins/Reflect/apply/arguments-list-is-not-array-like.js':
+    Object.freeze(['Reflect', 'arrow-function', 'Symbol']),
+  'test/built-ins/Reflect/apply/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/construct/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/defineProperty/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/deleteProperty/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/get/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/getOwnPropertyDescriptor/not-a-constructor.js':
+    Object.freeze(['Reflect.construct', 'Reflect', 'arrow-function']),
+  'test/built-ins/Reflect/getPrototypeOf/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/has/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/isExtensible/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/preventExtensions/not-a-constructor.js':
+    Object.freeze(['Reflect.construct', 'Reflect', 'arrow-function']),
+  'test/built-ins/Reflect/set/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'Reflect.set',
+    'arrow-function',
+  ]),
+  'test/built-ins/Reflect/setPrototypeOf/not-a-constructor.js': Object.freeze([
+    'Reflect.construct',
+    'Reflect',
+    'Reflect.setPrototypeOf',
+    'arrow-function',
+  ]),
+});
+const M1_REPORT_ORDER_DIVERGENT_PATHS = Object.freeze(
+  Object.keys(M1_TRACKED_SOURCE_FEATURE_ORDER),
+);
+const M1_REPORT_TRACKED_EVIDENCE_PATHS = Object.freeze([
+  'tools/test262/es2015-audit-evidence.json',
+  'tools/test262/es2015-h0-promotion.json',
+  'tools/test262/es2015-m1-promotion.json',
+  'tools/test262/es2015-promotion.json',
 ]);
 const H0_PIN = Object.freeze({
   repository: 'https://github.com/tc39/test262.git',
@@ -124,6 +182,16 @@ const M0_PROMOTION = Object.freeze({
   variantCount: 0,
   entries: Object.freeze([]),
 });
+
+/** @param {string} path */
+async function readM1ReportEvidence(path) {
+  assertSame(
+    M1_REPORT_TRACKED_EVIDENCE_PATHS.includes(path),
+    true,
+    `M1 report-order test must use tracked evidence, not ${path}`,
+  );
+  return readFile(new URL(path, REPOSITORY_ROOT), 'utf8');
+}
 const H0_REASSIGNED_PATH = 'test/built-ins/Proxy/h0-failed.js';
 const H0_PASSED_PATH = 'test/language/h0-passed.js';
 const H0_PATHS = Object.freeze([H0_REASSIGNED_PATH, H0_PASSED_PATH]);
@@ -1546,45 +1614,63 @@ export default [
         upstreamRunModule.createPromotionReportFeaturesForPath;
       assertSame(typeof createReportFeatures, 'function');
       if (typeof createReportFeatures !== 'function') return;
-      const [promotionText, h0PromotionText, m1PromotionText] =
-        await Promise.all([
-          readFile(
-            new URL('tools/test262/es2015-promotion.json', REPOSITORY_ROOT),
-            'utf8',
-          ),
-          readFile(
-            new URL('tools/test262/es2015-h0-promotion.json', REPOSITORY_ROOT),
-            'utf8',
-          ),
-          readFile(
-            new URL('tools/test262/es2015-m1-promotion.json', REPOSITORY_ROOT),
-            'utf8',
-          ),
-        ]);
+      const [
+        promotionText,
+        h0PromotionText,
+        m1PromotionText,
+        auditEvidenceText,
+      ] = await Promise.all([
+        readM1ReportEvidence('tools/test262/es2015-promotion.json'),
+        readM1ReportEvidence('tools/test262/es2015-h0-promotion.json'),
+        readM1ReportEvidence('tools/test262/es2015-m1-promotion.json'),
+        readM1ReportEvidence('tools/test262/es2015-audit-evidence.json'),
+      ]);
       const promotion = parseEs2015Promotion(promotionText);
       const h0Promotion = parseEs2015Promotion(h0PromotionText);
       const m1Promotion = parseEs2015Promotion(m1PromotionText);
+      const auditEvidence = JSON.parse(auditEvidenceText);
       const reportFeaturesForPath = createReportFeatures(m1Promotion);
+      const m1Paths = new Set(m1Promotion.entries.map((entry) => entry.path));
+      const m1AuditRecords = auditEvidence.auditRecords.filter(
+        (/** @type {any} */ record) => m1Paths.has(record.file),
+      );
 
       assertSame(m1Promotion.entries.length, 103);
+      assertSame(m1AuditRecords.length, 206);
       for (const entry of m1Promotion.entries) {
         assertSame(
           JSON.stringify(reportFeaturesForPath(entry.path)),
           JSON.stringify(entry.features),
           `M1 report feature authority drifted for ${entry.path}`,
         );
+        const records = m1AuditRecords.filter(
+          (/** @type {any} */ record) => record.file === entry.path,
+        );
+        assertSame(
+          JSON.stringify(
+            records.map((/** @type {any} */ record) => [
+              record.variant,
+              record.status,
+            ]),
+          ),
+          JSON.stringify([
+            ['non-strict', 'passed'],
+            ['strict', 'passed'],
+          ]),
+          `tracked M1 audit evidence drifted for ${entry.path}`,
+        );
       }
 
+      const sourceFeaturesByPath = new Map(
+        Object.entries(M1_TRACKED_SOURCE_FEATURE_ORDER),
+      );
       const divergent = [];
       for (const entry of m1Promotion.entries) {
-        const source = await readFile(
-          new URL(`vendor/test262/${entry.path}`, REPOSITORY_ROOT),
-          'utf8',
-        );
-        const metadata = parseTest262Metadata(source);
+        const sourceFeatures =
+          sourceFeaturesByPath.get(entry.path) ?? entry.features;
         if (
           JSON.stringify(reportFeaturesForPath(entry.path)) !==
-          JSON.stringify(metadata.features)
+          JSON.stringify(sourceFeatures)
         ) {
           divergent.push(entry.path);
         }
