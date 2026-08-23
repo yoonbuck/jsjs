@@ -694,8 +694,9 @@ The selection projection removes exactly these seven obsolete exclusions:
 6. `vendor/test262/test/staging/sm/object/bug-1206700.js`
 7. `vendor/test262/test/staging/sm/strict/primitive-assignment.js`
 
-The promoted M1 group adds no new path to the selected union: the subset remains
-20,595 unique paths in 61 groups, with SHA-256
+The promoted M1 group adds its 103 Reflect roots as the new
+`es2015/m1-reflect` group, growing the selected union from 20,492 to 20,595
+unique paths across 61 groups, with SHA-256
 `9f768aa8fb0c473e98fe2156d290c4207cea797302cccad6f9b1b922a36b37c0`.
 Applied-authority audit reconstruction validates and reverses M1 before M0 so
 the historical H0 proof still sees the exact pre-roadmap classifications.
