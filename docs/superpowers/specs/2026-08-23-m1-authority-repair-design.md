@@ -48,6 +48,38 @@ The repair validator must require the exact commit, manifest bytes, checker
 bytes, and M1 record identity above. A branch based on any other commit is not
 this repair.
 
+## Single repair branch and documentation sequencing
+
+The design, later plan, checker repair, manifest correction, focused tests, and
+testing documentation all live on the single branch
+`yoonbuck-m1-authority-repair`, rooted at exact BASE
+`554afc367657439d116d23f4477bb24787a0e261`.
+
+The design and plan documents must not be pushed or merged independently before
+the complete repair PR. Either merge would move `main` away from the marker's
+exact BASE and invalidate the one-use contract. The final repair PR carries the
+complete six-path BASE-to-HEAD range, including both documentation additions.
+
+If any repair document lands on `main` separately, do not rebase this marker or
+silently update its BASE. Abandon the stale repair range and produce a newly
+reviewed design with new exact identities.
+
+### Diagnostic date-path supersession
+
+The diagnostic's suggested repair document names used `2026-08-22`. That path
+naming is superseded by this committed design. The normative paths are:
+
+```text
+docs/superpowers/specs/2026-08-23-m1-authority-repair-design.md
+docs/superpowers/plans/2026-08-23-m1-authority-repair.md
+```
+
+These two paths, and only these two repair documentation paths, participate in
+the strict allowlist. The corresponding `2026-08-22` repair spec/plan names are
+foreign paths and must be rejected. This date correction does not change any
+manifest, authority, promotion, projection, or consumer hash from the
+diagnostic.
+
 ## Confirmed root causes
 
 ### Incomplete harness include-feature closure
@@ -263,7 +295,27 @@ environment, matching CI. There is no reusable local repair profile.
 
 ### One-use identity
 
-The validator requires:
+The repaired checker contains immutable literal constants:
+
+```js
+const M1_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256 =
+  'c12f0cc983141fccfc132dd7d872a29022192d33d72389eac9960c3403b21fbf';
+const M1_AUTHORITY_REPAIR_HEAD_RECORD_SHA256 =
+  '42f7193e216332d40b3c852ae3a4d96aa5c24c29533c8cf344ced59b5b207670';
+```
+
+The checker must not derive either expected value from the marker or from the
+observed HEAD. Validation independently requires:
+
+1. the marker's HEAD manifest/record fields equal these literals;
+2. the computed HEAD manifest SHA-256 equals the manifest literal; and
+3. the computed canonical HEAD M1 record SHA-256 equals the record literal.
+
+Marker agreement with HEAD is necessary but not sufficient. A self-consistent
+alternate HEAD manifest/record plus a marker containing the matching alternate
+hashes must still fail against the immutable literals.
+
+The validator also requires:
 
 - exact merge base and event base
   `554afc367657439d116d23f4477bb24787a0e261`;
@@ -349,6 +401,39 @@ The dedicated validator requires:
 - no evidence or protected file added or modified in the repair range.
 
 Unknown difference fails with the exact record path/field where possible.
+
+### Defense-in-depth immutable bytes
+
+The six-path diff contract is necessary but not the only protection. Mirroring
+the H0 bootstrap repair, the dedicated validator also reads BASE and HEAD bytes
+and requires byte identity for:
+
+- `.github/workflows/ci.yml`;
+- `tools/ci/pipeline.js`;
+- `tools/test262/es2015-policy.json`;
+- `tools/test262/features.json`;
+- every
+  `tools/test262/es2015-provenance-decisions/*.json` decision fragment;
+- every evidence path named by every BASE roadmap authority; and
+- every protected-output path named by every BASE roadmap authority.
+
+For an authority evidence or protected-output path absent in BASE, HEAD must
+also be absent. This explicitly keeps all six future M1 evidence files absent
+during the repair. For an existing path, file mode and bytes must be identical.
+
+The protected-output assertion includes
+`tools/test262/es5-selection.json`: the repaired authority may add its future
+replacement commitment, but the policy file itself remains byte-identical
+through the repair.
+
+The intentionally changed checker, manifest, focused test, testing
+documentation, repair design, and repair plan are not part of this immutable
+set. The manifest receives its separate exact structural/hash validation.
+
+These assertions are redundant with a correct six-path Git diff by design.
+They defend against dependency mistakes, malformed/injected range fixtures,
+path-normalization errors, and future refactoring that reads an unreviewed HEAD
+input without expanding the range validator.
 
 ## Exact corrected M1 authority
 
@@ -504,7 +589,10 @@ Add tests for:
 - local `--profile/--marker` rejection;
 - wrong BASE commit or merge base;
 - wrong BASE manifest/checker/record hash; and
-- wrong HEAD manifest/record hash.
+- wrong HEAD manifest/record hash;
+- marker HEAD hashes that differ from the checker literals; and
+- a self-consistent alternate HEAD manifest/record plus matching alternate
+  marker hashes, which must still fail the immutable corrected literals.
 
 ### Six-path range
 
@@ -516,6 +604,24 @@ Add one positive exact range and negative tests for:
 - wrong add/modify status; and
 - workflow, pipeline, provenance schema module, evidence, protected output, or
   runtime changes.
+
+### Defense-in-depth immutable data
+
+For each immutable category, add a test where the reported six-path change set
+is otherwise valid but injected BASE/HEAD bytes differ:
+
+- workflow;
+- pipeline;
+- ES2015 policy;
+- feature manifest;
+- each decision fragment;
+- each existing authority evidence path;
+- each existing authority protected output; and
+- an M1 future evidence path appearing in HEAD.
+
+Every case must fail the exact immutable path. Positive coverage requires all
+derived BASE evidence/protected paths to be visited, not a hand-maintained
+partial sample.
 
 ### Pending authority replacement
 
@@ -595,6 +701,8 @@ local exception.
 The repair PR may merge only when:
 
 - the branch range starts at exact BASE;
+- design and plan remain unmerged commits on that same repair branch until the
+  complete repair PR;
 - all six and only six paths have exact statuses;
 - focused tests and repaired HEAD range validation pass;
 - the old BASE guard failure is captured and exact;
@@ -686,18 +794,26 @@ implementation.
 
 The design is satisfied when:
 
-1. the exact one-use marker is ordinary-PR-only and non-replayable;
-2. the final repair range is exactly six paths with exact statuses;
-3. the generic report validator preserves promotion root features;
-4. the corrected pending M1 record has canonical hash
+1. design and plan stay on the one exact-base repair branch until the complete
+   repair merge;
+2. the `2026-08-23` spec/plan paths supersede and exclude the diagnostic's
+   `2026-08-22` suggestions;
+3. the exact one-use marker is ordinary-PR-only and non-replayable;
+4. literal corrected HEAD manifest/record constants reject a self-consistent
+   alternate marker/HEAD pair;
+5. the final repair range is exactly six paths with exact statuses;
+6. workflow, pipeline, feature policy/manifest, fragments, evidence, and
+   protected-output bytes are independently BASE/HEAD identical;
+7. the generic report validator preserves promotion root features;
+8. the corrected pending M1 record has canonical hash
    `42f7193e216332d40b3c852ae3a4d96aa5c24c29533c8cf344ced59b5b207670`;
-5. the corrected pending manifest has SHA-256
+9. the corrected pending manifest has SHA-256
    `c12f0cc983141fccfc132dd7d872a29022192d33d72389eac9960c3403b21fbf`;
-6. M1 remains pending and every unrelated identity is unchanged;
-7. the authority owns corrected promotion, four projections, corrected
-   taxonomy identity, and exact selection replacement;
-8. the old BASE checker fails only for missing authorization;
-9. repaired HEAD CI and normal post-repair M1 consumption pass;
-10. the semantic branch derives exact include closure from pinned inventory and
+10. M1 remains pending and every unrelated identity is unchanged;
+11. the authority owns corrected promotion, four projections, corrected
+    taxonomy identity, and exact selection replacement;
+12. the old BASE checker fails only for missing authorization;
+13. repaired HEAD CI and normal post-repair M1 consumption pass;
+14. the semantic branch derives exact include closure from pinned inventory and
     removes the seven exclusions; and
-11. repair and rebuilt-consumer CI/CodeQL/closure evidence is complete.
+15. repair and rebuilt-consumer CI/CodeQL/closure evidence is complete.
