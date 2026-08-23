@@ -242,6 +242,48 @@ const tests = [
     },
   },
   {
+    name: 'Reflect.construct validates target before an explicit valid newTarget',
+    run() {
+      const realm = createRealm();
+      const target = evaluateScript(realm, '(() => {})').value;
+      const newTarget = evaluateScript(
+        realm,
+        '(function NewTarget() {})',
+      ).value;
+      const originalHas = WeakSet.prototype.has;
+      /** @type {string[]} */
+      const checks = [];
+
+      defineGlobal(realm, 'target', target);
+      defineGlobal(realm, 'newTarget', newTarget);
+
+      WeakSet.prototype.has = function has(value) {
+        if (value === target) {
+          checks.push('target');
+        } else if (value === newTarget) {
+          checks.push('newTarget');
+        }
+
+        return originalHas.call(this, value);
+      };
+
+      try {
+        assertSame(
+          evaluateScript(
+            realm,
+            'var message;' +
+              'try { Reflect.construct(target, [], newTarget); }' +
+              'catch (error) { message = error.message; } message;',
+          ).value,
+          'Reflect.construct target is not a constructor',
+        );
+        assertSame(JSON.stringify(checks), '["target"]');
+      } finally {
+        WeakSet.prototype.has = originalHas;
+      }
+    },
+  },
+  {
     name: 'Reflect.apply and Reflect.construct require private call and construct capabilities',
     run() {
       let spoofCalls = 0;
