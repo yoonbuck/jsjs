@@ -45,6 +45,7 @@ import {
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
 const REPOSITORY_ROOT_PATH = fileURLToPath(REPOSITORY_ROOT);
+const M1_REPAIRED_BASE = '44c2a747ee544fb85403380f86dc6a0e126faceb';
 const ES2015_AUDIT_EVIDENCE_FILE = 'tools/test262/es2015-audit-evidence.json';
 const ES2015_PROVENANCE_DECISIONS_DIRECTORY =
   'tools/test262/es2015-provenance-decisions';
@@ -191,6 +192,18 @@ const ALLOWED_FORMAT_EXCLUSIONS = Object.freeze({
     'Generated M0 path evidence, whose exact bytes are owned by the applied roadmap authority.',
   'tools/test262/es2015-m0-promotion.json':
     'Generated M0 promotion evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-m1-baseline.json':
+    'Generated M1 baseline evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-m1-disposition.json':
+    'Generated M1 disposition evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-m1-owner-deltas.json':
+    'Generated M1 owner-delta evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-m1-owner-map.json':
+    'Generated M1 owner-map evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-m1-paths.json':
+    'Generated M1 path evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-m1-promotion.json':
+    'Generated M1 promotion evidence, whose exact bytes are owned by the applied roadmap authority.',
 });
 
 const PROVENANCE_OWNERSHIP_REASON_FRAGMENT =
@@ -2672,15 +2685,44 @@ export default [
     },
   },
   {
-    // The coverage numbers docs/conformance.md publishes are generated into a marked
-    // block and drift-checked against a fresh run. The exclusion tally is not:
-    // it is prose a human wrote, describing how much of the upstream suite this
-    // selection sets aside and why. Prose that quotes a count rots the moment
-    // the policy changes, and a stale tally is worse than no tally, because it
-    // reads as measured. Bind it to the policy file instead.
-    name: 'the exclusion tally in docs/conformance.md matches the selection policy',
+    // M1's protected conformance projection may replace only the generated
+    // block, so its manual exclusion prose remains anchored to the repaired
+    // BASE while docs/testing.md records the exact seven-path applied delta.
+    name: 'the conformance exclusion tally matches its protected M1 base policy',
     run: async () => {
-      const policy = parseEs5Selection(await readSource(ES5_SELECTION_FILE));
+      const currentText = await readSource(ES5_SELECTION_FILE);
+      const baseResult = spawnSync(
+        'git',
+        ['show', `${M1_REPAIRED_BASE}:${ES5_SELECTION_FILE}`],
+        {
+          cwd: REPOSITORY_ROOT_PATH,
+          encoding: 'utf8',
+          maxBuffer: 64 * 1024 * 1024,
+        },
+      );
+      assertSame(
+        baseResult.status,
+        0,
+        `full Git history must contain the repaired M1 BASE ${ES5_SELECTION_FILE}`,
+      );
+      const policy = parseEs5Selection(baseResult.stdout);
+      const current = parseEs5Selection(currentText);
+      const currentPaths = new Set(
+        current.exclusions.map((exclusion) => exclusion.path),
+      );
+      const removed = policy.exclusions.filter(
+        (exclusion) => !currentPaths.has(exclusion.path),
+      );
+      assertSame(
+        createHash('sha256').update(baseResult.stdout).digest('hex'),
+        '533e0b9fc165a026d64c4e64d783cf2585de7236600acacf228f06d27f23d8c8',
+      );
+      assertSame(
+        createHash('sha256').update(currentText).digest('hex'),
+        '78ac694beb258be0b67c7788137c736b0b30cf7457e3a903d364d38c038b48df',
+      );
+      assertSame(removed.length, 7);
+      assertSame(current.exclusions.length, policy.exclusions.length - 7);
       const conformance = await readSource('docs/conformance.md');
       const counts = new Map(
         EXCLUSION_CATEGORIES.map((category) => [category, 0]),
@@ -2707,7 +2749,7 @@ export default [
         assertSame(
           Number(row?.[1]),
           count,
-          `docs/conformance.md says ${String(row?.[1])} ${category} exclusions; ${ES5_SELECTION_FILE} has ${count}`,
+          `docs/conformance.md says ${String(row?.[1])} ${category} exclusions; repaired M1 BASE has ${count}`,
         );
       }
 
@@ -2716,7 +2758,7 @@ export default [
       assertSame(
         conformance.includes(`The ${total} classified exclusions`),
         true,
-        `docs/conformance.md must report ${total} classified exclusions, the total in ${ES5_SELECTION_FILE}`,
+        `docs/conformance.md must report ${total} classified exclusions, the protected repaired-BASE total`,
       );
     },
   },

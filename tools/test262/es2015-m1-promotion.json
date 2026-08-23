@@ -1,0 +1,924 @@
+{
+  "groupName": "es2015/m1-reflect",
+  "version": 2,
+  "repository": "https://github.com/tc39/test262.git",
+  "revision": "b363f29d3c43c626dc852744ad64a0b48a003693",
+  "sourceTaxonomySha256": "7d366c58f83e635cfe92993f67bab9d6e4d7ef49184cdc7b85b96180cdaf89a4",
+  "ledgerSha256": "54478c8eb94b9daa98360ecfa852b0f6b288562e2d3c1f93f109e6a0929bd519",
+  "rootCount": 103,
+  "variantCount": 206,
+  "entries": [
+    {
+      "path": "test/built-ins/Reflect/Symbol.toStringTag.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Symbol.toStringTag"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/apply/apply.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/apply/arguments-list-is-not-array-like-but-still-valid.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Symbol",
+        "arrow-function"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/apply/arguments-list-is-not-array-like.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Symbol",
+        "arrow-function"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/apply/call-target.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/apply/length.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/apply/name.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/apply/not-a-constructor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct",
+        "arrow-function"
+      ],
+      "includeFeatures": [
+        "Reflect.construct"
+      ]
+    },
+    {
+      "path": "test/built-ins/Reflect/apply/return-target-call-result.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/construct/arguments-list-is-not-array-like.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/construct/construct.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/construct/length.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/construct/name.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/construct/not-a-constructor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct",
+        "arrow-function"
+      ],
+      "includeFeatures": [
+        "Reflect.construct"
+      ]
+    },
+    {
+      "path": "test/built-ins/Reflect/construct/return-with-newtarget-argument.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/construct/return-without-newtarget-argument.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/construct/use-arguments-list.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/defineProperty/define-properties.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/defineProperty/define-symbol-properties.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Symbol"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/defineProperty/defineProperty.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/defineProperty/length.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/defineProperty/name.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/defineProperty/not-a-constructor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct",
+        "arrow-function"
+      ],
+      "includeFeatures": [
+        "Reflect.construct"
+      ]
+    },
+    {
+      "path": "test/built-ins/Reflect/defineProperty/return-abrupt-from-attributes.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/defineProperty/return-abrupt-from-property-key.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/defineProperty/return-boolean.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/deleteProperty/delete-properties.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/deleteProperty/delete-symbol-properties.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Symbol"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/deleteProperty/deleteProperty.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/deleteProperty/length.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/deleteProperty/name.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/deleteProperty/not-a-constructor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct",
+        "arrow-function"
+      ],
+      "includeFeatures": [
+        "Reflect.construct"
+      ]
+    },
+    {
+      "path": "test/built-ins/Reflect/deleteProperty/return-abrupt-from-property-key.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/deleteProperty/return-boolean.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/get/get.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/get/length.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/get/name.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/get/not-a-constructor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct",
+        "arrow-function"
+      ],
+      "includeFeatures": [
+        "Reflect.construct"
+      ]
+    },
+    {
+      "path": "test/built-ins/Reflect/get/return-abrupt-from-property-key.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/get/return-abrupt-from-result.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/get/return-value-from-receiver.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/get/return-value-from-symbol-key.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Symbol"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/get/return-value.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getOwnPropertyDescriptor/getOwnPropertyDescriptor.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getOwnPropertyDescriptor/length.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getOwnPropertyDescriptor/name.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getOwnPropertyDescriptor/not-a-constructor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct",
+        "arrow-function"
+      ],
+      "includeFeatures": [
+        "Reflect.construct"
+      ]
+    },
+    {
+      "path": "test/built-ins/Reflect/getOwnPropertyDescriptor/return-abrupt-from-property-key.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getOwnPropertyDescriptor/return-from-accessor-descriptor.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getOwnPropertyDescriptor/return-from-data-descriptor.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getOwnPropertyDescriptor/symbol-property.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Symbol"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getOwnPropertyDescriptor/undefined-own-property.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getOwnPropertyDescriptor/undefined-property.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getPrototypeOf/getPrototypeOf.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getPrototypeOf/length.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getPrototypeOf/name.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getPrototypeOf/not-a-constructor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct",
+        "arrow-function"
+      ],
+      "includeFeatures": [
+        "Reflect.construct"
+      ]
+    },
+    {
+      "path": "test/built-ins/Reflect/getPrototypeOf/null-prototype.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getPrototypeOf/return-prototype.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/getPrototypeOf/skip-own-properties.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/has/has.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/has/length.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/has/name.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/has/not-a-constructor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct",
+        "arrow-function"
+      ],
+      "includeFeatures": [
+        "Reflect.construct"
+      ]
+    },
+    {
+      "path": "test/built-ins/Reflect/has/return-abrupt-from-property-key.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/has/return-boolean.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/has/symbol-property.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Symbol"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/isExtensible/isExtensible.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/isExtensible/length.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/isExtensible/name.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/isExtensible/not-a-constructor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct",
+        "arrow-function"
+      ],
+      "includeFeatures": [
+        "Reflect.construct"
+      ]
+    },
+    {
+      "path": "test/built-ins/Reflect/isExtensible/return-boolean.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/preventExtensions/always-return-true-from-ordinary-object.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/preventExtensions/length.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/preventExtensions/name.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/preventExtensions/not-a-constructor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct",
+        "arrow-function"
+      ],
+      "includeFeatures": [
+        "Reflect.construct"
+      ]
+    },
+    {
+      "path": "test/built-ins/Reflect/preventExtensions/prevent-extensions.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/preventExtensions/preventExtensions.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/call-prototype-property-set.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.set"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/creates-a-data-descriptor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.set"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/different-property-descriptors.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.set"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/length.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.set"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/name.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.set"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/not-a-constructor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct",
+        "Reflect.set",
+        "arrow-function"
+      ],
+      "includeFeatures": [
+        "Reflect.construct"
+      ]
+    },
+    {
+      "path": "test/built-ins/Reflect/set/receiver-is-not-object.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.set"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/return-abrupt-from-property-key.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.set"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/return-abrupt-from-result.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.set"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/return-false-if-receiver-is-not-writable.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.set"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/return-false-if-target-is-not-writable.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.set"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/set-value-on-accessor-descriptor-with-receiver.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.set"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/set-value-on-accessor-descriptor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.set"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/set-value-on-data-descriptor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.set"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/set.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/set/symbol-property.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.set",
+        "Symbol"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/setPrototypeOf/length.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.setPrototypeOf"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/setPrototypeOf/name.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.setPrototypeOf"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/setPrototypeOf/not-a-constructor.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.construct",
+        "Reflect.setPrototypeOf",
+        "arrow-function"
+      ],
+      "includeFeatures": [
+        "Reflect.construct"
+      ]
+    },
+    {
+      "path": "test/built-ins/Reflect/setPrototypeOf/return-false-if-target-and-proto-are-the-same.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.setPrototypeOf"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/setPrototypeOf/return-false-if-target-is-not-extensible.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.setPrototypeOf"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/setPrototypeOf/return-false-if-target-is-prototype-of-proto.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.setPrototypeOf"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/setPrototypeOf/return-true-if-new-prototype-is-set.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.setPrototypeOf"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/setPrototypeOf/return-true-if-proto-is-current.js",
+      "variants": 2,
+      "features": [
+        "Reflect",
+        "Reflect.setPrototypeOf"
+      ],
+      "includeFeatures": []
+    },
+    {
+      "path": "test/built-ins/Reflect/setPrototypeOf/setPrototypeOf.js",
+      "variants": 2,
+      "features": [
+        "Reflect"
+      ],
+      "includeFeatures": []
+    }
+  ]
+}

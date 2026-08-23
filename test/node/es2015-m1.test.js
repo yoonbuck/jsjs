@@ -1,5 +1,7 @@
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { readFile, rm, symlink } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import * as m1Module from '../../tools/test262/es2015-m1.js';
 import {
@@ -12,14 +14,19 @@ import {
   projectM1CoreOutputs,
   resolveM1OutputPath,
   runM1Focused,
-  main as runM1Command,
   verifyM1Ledger,
 } from '../../tools/test262/es2015-m1.js';
 import { parseEs2015Promotion } from '../../tools/test262/es2015-promotion.js';
+import {
+  canonicalRoadmapAuthoritySha256,
+  roadmapAggregateProjectionSha256,
+} from '../../tools/test262/es2015-provenance.js';
 import { buildEs2015Inventory } from '../../tools/test262/es2015-taxonomy.js';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
+const REPOSITORY_ROOT_PATH = fileURLToPath(REPOSITORY_ROOT);
 const { structuredClone } = globalThis;
+const M1_REPAIRED_BASE = '44c2a747ee544fb85403380f86dc6a0e126faceb';
 const M1_CONSTRUCTOR_INCLUDE_PATHS = Object.freeze([
   'test/built-ins/Reflect/apply/not-a-constructor.js',
   'test/built-ins/Reflect/construct/not-a-constructor.js',
@@ -49,18 +56,28 @@ function sha256(text) {
   return createHash('sha256').update(text).digest('hex');
 }
 
+/** @param {string} path */
+function readM1BaseText(path) {
+  const result = spawnSync('git', ['show', `${M1_REPAIRED_BASE}:${path}`], {
+    cwd: REPOSITORY_ROOT_PATH,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    throw new Error(`M1 repaired BASE file is unavailable: ${path}`);
+  }
+  return result.stdout;
+}
+
 async function readM1Inputs() {
-  const [ledgerText, taxonomyText] = await Promise.all([
-    readFile(
-      new URL('tools/test262/es2015-m1-paths.txt', REPOSITORY_ROOT),
-      'utf8',
-    ),
-    readFile(
-      new URL('tools/test262/es2015-taxonomy.json', REPOSITORY_ROOT),
-      'utf8',
-    ),
-  ]);
-  return { ledgerText, taxonomy: JSON.parse(taxonomyText) };
+  const ledgerText = await readFile(
+    new URL('tools/test262/es2015-m1-paths.txt', REPOSITORY_ROOT),
+    'utf8',
+  );
+  return {
+    ledgerText,
+    taxonomy: JSON.parse(readM1BaseText('tools/test262/es2015-taxonomy.json')),
+  };
 }
 
 /**
@@ -94,25 +111,6 @@ function syntheticM1Inventory(ledgerText, taxonomy) {
   });
 }
 
-/** @param {string} path @param {any} taxonomy */
-function syntheticM1Source(path, taxonomy) {
-  const entry = taxonomy.classifications.find(
-    (/** @type {any} */ candidate) => candidate.path === path,
-  );
-  if (entry === undefined) {
-    throw new Error(`missing M1 source fixture: ${path}`);
-  }
-  return [
-    '/*---',
-    'description: focused M1 inventory fixture',
-    `features: ${JSON.stringify(entry.features)}`,
-    `flags: ${JSON.stringify(entry.flags)}`,
-    `includes: ${JSON.stringify(entry.includes)}`,
-    '---*/',
-    '',
-  ].join('\n');
-}
-
 function syntheticM1IncludeDefinitions() {
   return new Map([
     ['compareArray.js', { features: [], includes: [] }],
@@ -122,36 +120,22 @@ function syntheticM1IncludeDefinitions() {
 }
 
 async function readM1ProjectionInputs() {
-  const [
-    ledgerText,
-    taxonomyText,
-    auditEvidenceText,
-    subsetText,
-    reportText,
-    conformanceText,
-    featuresText,
-    selectionText,
-  ] = await Promise.all(
-    [
-      'tools/test262/es2015-m1-paths.txt',
-      'tools/test262/es2015-taxonomy.json',
-      'tools/test262/es2015-audit-evidence.json',
-      'tools/test262/upstream-subset.json',
-      'docs/test262-report.jsonl',
-      'docs/conformance.md',
-      'tools/test262/features.json',
-      'tools/test262/es5-selection.json',
-    ].map((file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8')),
+  const [ledgerText, featuresText] = await Promise.all(
+    ['tools/test262/es2015-m1-paths.txt', 'tools/test262/features.json'].map(
+      (file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8'),
+    ),
   );
   return {
     ledgerText,
-    taxonomyText,
-    auditEvidenceText,
-    subsetText,
-    reportText,
-    conformanceText,
+    taxonomyText: readM1BaseText('tools/test262/es2015-taxonomy.json'),
+    auditEvidenceText: readM1BaseText(
+      'tools/test262/es2015-audit-evidence.json',
+    ),
+    subsetText: readM1BaseText('tools/test262/upstream-subset.json'),
+    reportText: readM1BaseText('docs/test262-report.jsonl'),
+    conformanceText: readM1BaseText('docs/conformance.md'),
     featuresText,
-    selectionText,
+    selectionText: readM1BaseText('tools/test262/es5-selection.json'),
   };
 }
 
@@ -300,6 +284,110 @@ export default [
           Error,
         ).message.includes('classification mismatch'),
         true,
+      );
+    },
+  },
+  {
+    name: 'applied M1 execution reconstructs and validates the exact source taxonomy',
+    run: async () => {
+      const reconstruct = m1Module.reconstructAppliedM1SourceTaxonomy;
+      assertSame(typeof reconstruct, 'function');
+      if (typeof reconstruct !== 'function') return;
+      const [
+        ledgerText,
+        taxonomyText,
+        baselineText,
+        dispositionText,
+        provenanceText,
+      ] = await Promise.all(
+        [
+          'tools/test262/es2015-m1-paths.txt',
+          'tools/test262/es2015-taxonomy.json',
+          'tools/test262/es2015-m1-baseline.json',
+          'tools/test262/es2015-m1-disposition.json',
+          'tools/test262/es2015-provenance.json',
+        ].map((file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8')),
+      );
+      const options = {
+        taxonomyText,
+        baselineText,
+        dispositionText,
+        provenanceText,
+      };
+      const source = reconstruct(options);
+      assertSame(verifyM1Ledger(ledgerText, source).length, M1.roots);
+      const sourceByPath = new Map(
+        source.classifications.map((/** @type {any} */ entry) => [
+          entry.path,
+          entry,
+        ]),
+      );
+      assertSame(
+        JSON.stringify(
+          JSON.parse(baselineText).map((/** @type {any} */ entry) =>
+            sourceByPath.get(entry.path),
+          ),
+        ),
+        JSON.stringify(JSON.parse(baselineText)),
+      );
+      assertSame(
+        assertThrows(
+          () => reconstruct({ ...options, baselineText: `${baselineText} ` }),
+          Error,
+        ).message,
+        'Focused M1 execution evidence does not match authority',
+      );
+
+      const disposition = JSON.parse(dispositionText);
+      const sourcePath = disposition.destinations[0].path;
+      const mismatched = JSON.parse(taxonomyText);
+      const mismatchedEntry = mismatched.classifications.find(
+        (/** @type {any} */ entry) => entry.path === sourcePath,
+      );
+      if (mismatchedEntry === undefined) {
+        throw new Error('missing applied M1 taxonomy fixture');
+      }
+      mismatchedEntry.status =
+        mismatchedEntry.status === 'selected-passing'
+          ? 'blocked:proxy-and-reflect-metaobject'
+          : 'selected-passing';
+      mismatchedEntry.blocker =
+        mismatchedEntry.status === 'selected-passing'
+          ? null
+          : 'proxy-and-reflect-metaobject';
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              taxonomyText: `${JSON.stringify(mismatched, null, 2)}\n`,
+            }),
+          Error,
+        ).message,
+        `Focused M1 applied taxonomy mismatch: ${sourcePath}`,
+      );
+
+      const drifted = JSON.parse(taxonomyText);
+      const driftedEntry = drifted.classifications.find(
+        (/** @type {any} */ entry) => entry.path === sourcePath,
+      );
+      if (driftedEntry === undefined) {
+        throw new Error('missing applied M1 taxonomy fixture');
+      }
+      driftedEntry.provenance = [
+        ...driftedEntry.provenance,
+        'foreign-m1-drift',
+      ];
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              taxonomyText: `${JSON.stringify(drifted, null, 2)}\n`,
+            }),
+          Error,
+        ).message,
+        `Focused M1 applied taxonomy drift: ${sourcePath}`,
       );
     },
   },
@@ -1020,7 +1108,9 @@ export default [
       const repaired = manifest.roadmapAuthorities.find(
         (/** @type {any} */ entry) => entry.code === 'M1',
       );
-      assertSame(JSON.stringify(authority), JSON.stringify(repaired));
+      const appliedAuthority = structuredClone(authority);
+      appliedAuthority.state = 'applied';
+      assertSame(JSON.stringify(appliedAuthority), JSON.stringify(repaired));
       assertSame(
         JSON.stringify(authority.destinations),
         JSON.stringify([
@@ -1039,115 +1129,181 @@ export default [
     },
   },
   {
-    name: 'M1 build-scratch mode writes only the complete ignored bundle',
+    name: 'tracked M1 evidence reproduces the exact corrected applied projection',
     run: async () => {
-      const { ledgerText, taxonomy } = await readM1Inputs();
-      /** @type {string[]} */
-      const readPaths = [];
-      const executionPath =
-        '.superpowers/issue-80/m1/unit-build-execution.json';
-      await writeFile(
-        new URL(executionPath, REPOSITORY_ROOT),
-        `${JSON.stringify(
-          syntheticM1Execution(ledgerText, taxonomy),
-          null,
-          2,
-        )}\n`,
-        'utf8',
+      const [
+        ledgerText,
+        taxonomyText,
+        auditEvidenceText,
+        subsetText,
+        reportText,
+        conformanceText,
+        featuresText,
+        selectionText,
+        pathsText,
+        baselineText,
+        dispositionText,
+        ownerDeltasText,
+        ownerMapText,
+        promotionText,
+        provenanceText,
+      ] = await Promise.all(
+        [
+          'tools/test262/es2015-m1-paths.txt',
+          'tools/test262/es2015-taxonomy.json',
+          'tools/test262/es2015-audit-evidence.json',
+          'tools/test262/upstream-subset.json',
+          'docs/test262-report.jsonl',
+          'docs/conformance.md',
+          'tools/test262/features.json',
+          'tools/test262/es5-selection.json',
+          'tools/test262/es2015-m1-paths.json',
+          'tools/test262/es2015-m1-baseline.json',
+          'tools/test262/es2015-m1-disposition.json',
+          'tools/test262/es2015-m1-owner-deltas.json',
+          'tools/test262/es2015-m1-owner-map.json',
+          'tools/test262/es2015-m1-promotion.json',
+          'tools/test262/es2015-provenance.json',
+        ].map((file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8')),
       );
-      try {
-        assertSame(
-          await runM1Command(
-            [
-              '--build-scratch',
-              '--ledger=tools/test262/es2015-m1-paths.txt',
-              `--execution=${executionPath}`,
-              '--output=.superpowers/issue-80/m1',
-            ],
-            {
-              environment: { TZ: 'UTC' },
-              readPin: async () => ({
-                ...taxonomy.pin,
-                checkoutPath: 'vendor/test262',
-              }),
-              assertPinnedCheckout: async (pin) => {
-                assertSame(pin.repository, taxonomy.pin.repository);
-                assertSame(pin.revision, taxonomy.pin.revision);
-              },
-              readRoot: async (path) => {
-                readPaths.push(path);
-                return syntheticM1Source(path, taxonomy);
-              },
-              readIncludeDefinitions: async () =>
-                syntheticM1IncludeDefinitions(),
-            },
-          ),
-          0,
-        );
-        assertSame(readPaths.join('\n'), ledgerText.trimEnd());
-        const expected = [
-          '.superpowers/issue-80/m1/evidence/es2015-m1-paths.json',
-          '.superpowers/issue-80/m1/evidence/es2015-m1-baseline.json',
-          '.superpowers/issue-80/m1/evidence/es2015-m1-disposition.json',
-          '.superpowers/issue-80/m1/evidence/es2015-m1-owner-deltas.json',
-          '.superpowers/issue-80/m1/evidence/es2015-m1-owner-map.json',
-          '.superpowers/issue-80/m1/evidence/es2015-m1-promotion.json',
-          '.superpowers/issue-80/m1/projected/docs/conformance.md',
-          '.superpowers/issue-80/m1/projected/docs/test262-report.jsonl',
-          '.superpowers/issue-80/m1/projected/tools/test262/es2015-audit-evidence.json',
-          '.superpowers/issue-80/m1/projected/tools/test262/es2015-taxonomy.json',
-          '.superpowers/issue-80/m1/projected/tools/test262/es5-selection.json',
-          '.superpowers/issue-80/m1/projected/tools/test262/upstream-subset.json',
-          '.superpowers/issue-80/m1/authority-record.json',
-          '.superpowers/issue-80/m1/protected-projection.json',
-          '.superpowers/issue-80/m1/summary.json',
-        ];
-        const texts = await Promise.all(
-          expected.map((file) =>
-            readFile(new URL(file, REPOSITORY_ROOT), 'utf8'),
-          ),
-        );
-        assertSame(
-          texts.every((text) => text.endsWith('\n')),
-          true,
-        );
-        const summary = JSON.parse(texts[texts.length - 1]);
-        assertSame(summary.ledger.roots, 113);
-        assertSame(summary.ledger.variants, 226);
-        assertSame(summary.outcome.completePassRoots, 103);
-        assertSame(summary.outcome.completePassVariants, 206);
-        assertSame(summary.outcome.residualRoots, 10);
-        assertSame(summary.outcome.residualVariants, 20);
-        assertSame(
-          summary.authoritySha256,
-          '42f7193e216332d40b3c852ae3a4d96aa5c24c29533c8cf344ced59b5b207670',
-        );
-        assertSame(
-          summary.protectedProjectionSha256,
-          '22bf654462044eb3febfbcec43e1c56a20cd89392c763e8d141fd6f3274289ed',
-        );
-        assertSame(
-          summary.fileSha256['evidence/es2015-m1-promotion.json'],
-          '31f807a05d56d35762cd5457f779624df04f11ef482b3d1bcb60be3a06883c69',
-        );
-        assertSame(
-          summary.fileSha256['projected/tools/test262/es2015-taxonomy.json'],
-          'fba700539b05edd67b6cf67e4c0a1361398a2d0f04212bc7080a83f44abf577a',
-        );
-        assertSame(
-          summary.fileSha256['projected/tools/test262/es5-selection.json'],
-          '78ac694beb258be0b67c7788137c736b0b30cf7457e3a903d364d38c038b48df',
-        );
-        assertSame(
-          Object.values(summary.fileSha256).every(
-            (value) =>
-              typeof value === 'string' && /^[0-9a-f]{64}$/u.test(value),
-          ),
-          true,
-        );
-      } finally {
-        await rm(new URL(executionPath, REPOSITORY_ROOT), { force: true });
+      const sourceTaxonomyText = readM1BaseText(
+        'tools/test262/es2015-taxonomy.json',
+      );
+      const sourceAuditEvidenceText = readM1BaseText(
+        'tools/test262/es2015-audit-evidence.json',
+      );
+      const sourceSubsetText = readM1BaseText(
+        'tools/test262/upstream-subset.json',
+      );
+      const sourceReportText = readM1BaseText('docs/test262-report.jsonl');
+      const sourceConformanceText = readM1BaseText('docs/conformance.md');
+      const sourceSelectionText = readM1BaseText(
+        'tools/test262/es5-selection.json',
+      );
+      const sourceTaxonomy = JSON.parse(sourceTaxonomyText);
+      const sourcePaths = new Set(JSON.parse(pathsText));
+      const execution = {
+        version: 1,
+        ledger: M1,
+        records: JSON.parse(auditEvidenceText).auditRecords.filter(
+          (/** @type {any} */ record) => sourcePaths.has(record.file),
+        ),
+      };
+      assertSame(execution.records.length, 226);
+      const inventory = syntheticM1Inventory(ledgerText, sourceTaxonomy);
+      const evidence = buildM1AuthorityEvidence({
+        ledgerText,
+        taxonomyText: sourceTaxonomyText,
+        execution,
+        inventory,
+      });
+      const render = (/** @type {unknown} */ value) =>
+        `${JSON.stringify(value, null, 2)}\n`;
+      /** @type {Record<string, string>} */
+      const evidenceTexts = {
+        'tools/test262/es2015-m1-paths.json': render(evidence.paths),
+        'tools/test262/es2015-m1-baseline.json': render(evidence.baseline),
+        'tools/test262/es2015-m1-disposition.json': render(
+          evidence.disposition,
+        ),
+        'tools/test262/es2015-m1-owner-deltas.json': render(
+          evidence.ownerDeltas,
+        ),
+        'tools/test262/es2015-m1-owner-map.json': render(evidence.ownerMap),
+        'tools/test262/es2015-m1-promotion.json': render(evidence.promotion),
+      };
+      /** @type {Record<string, string>} */
+      const trackedEvidenceTexts = {
+        'tools/test262/es2015-m1-paths.json': pathsText,
+        'tools/test262/es2015-m1-baseline.json': baselineText,
+        'tools/test262/es2015-m1-disposition.json': dispositionText,
+        'tools/test262/es2015-m1-owner-deltas.json': ownerDeltasText,
+        'tools/test262/es2015-m1-owner-map.json': ownerMapText,
+        'tools/test262/es2015-m1-promotion.json': promotionText,
+      };
+      for (const [path, text] of Object.entries(evidenceTexts)) {
+        assertSame(text, trackedEvidenceTexts[path]);
       }
+
+      const projected = projectM1CoreOutputs({
+        taxonomyText: sourceTaxonomyText,
+        auditEvidenceText: sourceAuditEvidenceText,
+        subsetText: sourceSubsetText,
+        reportText: sourceReportText,
+        conformanceText: sourceConformanceText,
+        featuresText,
+        evidence,
+        execution,
+        inventory,
+      });
+      const projectM1Selection = m1Module.projectM1Selection;
+      if (typeof projectM1Selection !== 'function') {
+        throw new Error('M1 selection projection is unavailable');
+      }
+      const selection = projectM1Selection(sourceSelectionText);
+      assertSame(projected.taxonomyText, taxonomyText);
+      assertSame(projected.auditEvidenceText, auditEvidenceText);
+      assertSame(projected.subsetText, subsetText);
+      assertSame(projected.reportText, reportText);
+      assertSame(projected.conformanceText, conformanceText);
+      assertSame(selection.headText, selectionText);
+
+      const pendingAuthority = buildM1PendingAuthority({
+        baseTaxonomyText: sourceTaxonomyText,
+        evidenceTexts,
+        baseOutputs: {
+          'docs/conformance.md': sourceConformanceText,
+          'docs/test262-report.jsonl': sourceReportText,
+          'tools/test262/es2015-audit-evidence.json': sourceAuditEvidenceText,
+          'tools/test262/es2015-taxonomy.json': sourceTaxonomyText,
+          'tools/test262/es5-selection.json': sourceSelectionText,
+          'tools/test262/upstream-subset.json': sourceSubsetText,
+        },
+        projectedOutputs: {
+          'docs/conformance.md': projected.conformanceText,
+          'docs/test262-report.jsonl': projected.reportText,
+          'tools/test262/es2015-audit-evidence.json':
+            projected.auditEvidenceText,
+          'tools/test262/es2015-taxonomy.json': projected.taxonomyText,
+          'tools/test262/es5-selection.json': selection.headText,
+          'tools/test262/upstream-subset.json': projected.subsetText,
+        },
+      });
+      const manifest = JSON.parse(provenanceText);
+      const trackedAuthority = manifest.roadmapAuthorities.find(
+        (/** @type {any} */ entry) => entry.code === 'M1',
+      );
+      if (trackedAuthority === undefined) {
+        throw new Error('missing tracked M1 roadmap authority');
+      }
+      const appliedAuthority = structuredClone(pendingAuthority);
+      appliedAuthority.state = 'applied';
+      assertSame(
+        JSON.stringify(appliedAuthority),
+        JSON.stringify(trackedAuthority),
+      );
+      assertSame(trackedAuthority.state, 'applied');
+      assertSame(trackedAuthority.protectedOutputs.length, 12);
+      assertSame(
+        canonicalRoadmapAuthoritySha256(pendingAuthority),
+        '42f7193e216332d40b3c852ae3a4d96aa5c24c29533c8cf344ced59b5b207670',
+      );
+      assertSame(
+        roadmapAggregateProjectionSha256(trackedAuthority),
+        '22bf654462044eb3febfbcec43e1c56a20cd89392c763e8d141fd6f3274289ed',
+      );
+      assertSame(
+        sha256(promotionText),
+        '31f807a05d56d35762cd5457f779624df04f11ef482b3d1bcb60be3a06883c69',
+      );
+      assertSame(
+        sha256(taxonomyText),
+        'fba700539b05edd67b6cf67e4c0a1361398a2d0f04212bc7080a83f44abf577a',
+      );
+      assertSame(
+        sha256(selectionText),
+        '78ac694beb258be0b67c7788137c736b0b30cf7457e3a903d364d38c038b48df',
+      );
     },
   },
 ];

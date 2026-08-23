@@ -37039,109 +37039,109 @@
       "type": "test",
       "file": "test/built-ins/Reflect/Symbol.toStringTag.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/Symbol.toStringTag.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/apply.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/apply.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/arguments-list-is-not-array-like-but-still-valid.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/arguments-list-is-not-array-like-but-still-valid.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/arguments-list-is-not-array-like.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/arguments-list-is-not-array-like.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/call-target.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/call-target.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/length.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/length.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/name.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/name.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/not-a-constructor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/not-a-constructor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/return-target-call-result.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/apply/return-target-call-result.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -37159,49 +37159,49 @@
       "type": "test",
       "file": "test/built-ins/Reflect/construct/arguments-list-is-not-array-like.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/construct/arguments-list-is-not-array-like.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/construct/construct.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/construct/construct.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/construct/length.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/construct/length.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/construct/name.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/construct/name.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -37219,37 +37219,37 @@
       "type": "test",
       "file": "test/built-ins/Reflect/construct/not-a-constructor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/construct/not-a-constructor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/construct/return-with-newtarget-argument.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/construct/return-with-newtarget-argument.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/construct/return-without-newtarget-argument.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/construct/return-without-newtarget-argument.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -37267,109 +37267,109 @@
       "type": "test",
       "file": "test/built-ins/Reflect/construct/use-arguments-list.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/construct/use-arguments-list.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/define-properties.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/define-properties.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/define-symbol-properties.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/define-symbol-properties.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/defineProperty.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/defineProperty.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/length.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/length.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/name.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/name.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/not-a-constructor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/not-a-constructor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/return-abrupt-from-attributes.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/return-abrupt-from-attributes.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/return-abrupt-from-property-key.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/return-abrupt-from-property-key.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -37387,13 +37387,13 @@
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/return-boolean.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/defineProperty/return-boolean.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -37423,85 +37423,85 @@
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/delete-properties.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/delete-properties.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/delete-symbol-properties.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/delete-symbol-properties.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/deleteProperty.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/deleteProperty.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/length.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/length.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/name.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/name.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/not-a-constructor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/not-a-constructor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/return-abrupt-from-property-key.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/return-abrupt-from-property-key.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -37519,13 +37519,13 @@
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/return-boolean.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/deleteProperty/return-boolean.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -37567,109 +37567,109 @@
       "type": "test",
       "file": "test/built-ins/Reflect/get/get.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/get.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/length.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/length.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/name.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/name.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/not-a-constructor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/not-a-constructor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/return-abrupt-from-property-key.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/return-abrupt-from-property-key.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/return-abrupt-from-result.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/return-abrupt-from-result.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/return-value-from-receiver.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/return-value-from-receiver.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/return-value-from-symbol-key.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/return-value-from-symbol-key.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/return-value.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/get/return-value.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -37699,61 +37699,61 @@
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/getOwnPropertyDescriptor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/getOwnPropertyDescriptor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/length.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/length.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/name.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/name.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/not-a-constructor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/not-a-constructor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/return-abrupt-from-property-key.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/return-abrupt-from-property-key.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -37771,37 +37771,37 @@
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/return-from-accessor-descriptor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/return-from-accessor-descriptor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/return-from-data-descriptor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/return-from-data-descriptor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/symbol-property.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/symbol-property.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -37831,85 +37831,85 @@
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/undefined-own-property.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/undefined-own-property.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/undefined-property.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getOwnPropertyDescriptor/undefined-property.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getPrototypeOf/getPrototypeOf.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getPrototypeOf/getPrototypeOf.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getPrototypeOf/length.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getPrototypeOf/length.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getPrototypeOf/name.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getPrototypeOf/name.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getPrototypeOf/not-a-constructor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getPrototypeOf/not-a-constructor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getPrototypeOf/null-prototype.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getPrototypeOf/null-prototype.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -37927,25 +37927,25 @@
       "type": "test",
       "file": "test/built-ins/Reflect/getPrototypeOf/return-prototype.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getPrototypeOf/return-prototype.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getPrototypeOf/skip-own-properties.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/getPrototypeOf/skip-own-properties.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -37975,61 +37975,61 @@
       "type": "test",
       "file": "test/built-ins/Reflect/has/has.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/has/has.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/has/length.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/has/length.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/has/name.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/has/name.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/has/not-a-constructor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/has/not-a-constructor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/has/return-abrupt-from-property-key.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/has/return-abrupt-from-property-key.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -38047,25 +38047,25 @@
       "type": "test",
       "file": "test/built-ins/Reflect/has/return-boolean.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/has/return-boolean.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/has/symbol-property.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/has/symbol-property.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -38095,49 +38095,49 @@
       "type": "test",
       "file": "test/built-ins/Reflect/isExtensible/isExtensible.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/isExtensible/isExtensible.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/isExtensible/length.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/isExtensible/length.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/isExtensible/name.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/isExtensible/name.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/isExtensible/not-a-constructor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/isExtensible/not-a-constructor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -38155,13 +38155,13 @@
       "type": "test",
       "file": "test/built-ins/Reflect/isExtensible/return-boolean.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/isExtensible/return-boolean.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -38359,73 +38359,73 @@
       "type": "test",
       "file": "test/built-ins/Reflect/preventExtensions/always-return-true-from-ordinary-object.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/preventExtensions/always-return-true-from-ordinary-object.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/preventExtensions/length.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/preventExtensions/length.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/preventExtensions/name.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/preventExtensions/name.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/preventExtensions/not-a-constructor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/preventExtensions/not-a-constructor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/preventExtensions/prevent-extensions.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/preventExtensions/prevent-extensions.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/preventExtensions/preventExtensions.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/preventExtensions/preventExtensions.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -38491,193 +38491,193 @@
       "type": "test",
       "file": "test/built-ins/Reflect/set/call-prototype-property-set.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/call-prototype-property-set.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/creates-a-data-descriptor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/creates-a-data-descriptor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/different-property-descriptors.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/different-property-descriptors.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/length.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/length.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/name.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/name.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/not-a-constructor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/not-a-constructor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/receiver-is-not-object.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/receiver-is-not-object.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/return-abrupt-from-property-key.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/return-abrupt-from-property-key.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/return-abrupt-from-result.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/return-abrupt-from-result.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/return-false-if-receiver-is-not-writable.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/return-false-if-receiver-is-not-writable.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/return-false-if-target-is-not-writable.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/return-false-if-target-is-not-writable.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/set-value-on-accessor-descriptor-with-receiver.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/set-value-on-accessor-descriptor-with-receiver.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/set-value-on-accessor-descriptor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/set-value-on-accessor-descriptor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/set-value-on-data-descriptor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/set-value-on-data-descriptor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/set.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/set.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/symbol-property.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/set/symbol-property.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -38707,37 +38707,37 @@
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/length.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/length.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/name.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/name.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/not-a-constructor.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/not-a-constructor.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -38779,73 +38779,73 @@
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/return-false-if-target-and-proto-are-the-same.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/return-false-if-target-and-proto-are-the-same.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/return-false-if-target-is-not-extensible.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/return-false-if-target-is-not-extensible.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/return-false-if-target-is-prototype-of-proto.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/return-false-if-target-is-prototype-of-proto.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/return-true-if-new-prototype-is-set.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/return-true-if-new-prototype-is-set.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/return-true-if-proto-is-current.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/return-true-if-proto-is-current.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/setPrototypeOf.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/built-ins/Reflect/setPrototypeOf/setPrototypeOf.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -133601,119 +133601,16 @@
     "test/built-ins/Proxy/setPrototypeOf/trap-is-null-target-is-proxy.js": "proxy-and-reflect-metaobject",
     "test/built-ins/Proxy/setPrototypeOf/trap-is-undefined-or-null.js": "proxy-and-reflect-metaobject",
     "test/built-ins/Proxy/setPrototypeOf/trap-is-undefined-target-is-proxy.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/Symbol.toStringTag.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/apply/apply.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/apply/arguments-list-is-not-array-like-but-still-valid.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/apply/arguments-list-is-not-array-like.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/apply/call-target.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/apply/length.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/apply/name.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/apply/not-a-constructor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/apply/return-target-call-result.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/construct/arguments-list-is-not-array-like.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/construct/construct.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/construct/length.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/construct/name.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/construct/not-a-constructor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/construct/return-with-newtarget-argument.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/construct/return-without-newtarget-argument.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/construct/use-arguments-list.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/defineProperty/define-properties.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/defineProperty/define-symbol-properties.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/defineProperty/defineProperty.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/defineProperty/length.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/defineProperty/name.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/defineProperty/not-a-constructor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/defineProperty/return-abrupt-from-attributes.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/defineProperty/return-abrupt-from-property-key.js": "proxy-and-reflect-metaobject",
     "test/built-ins/Reflect/defineProperty/return-abrupt-from-result.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/defineProperty/return-boolean.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/deleteProperty/delete-properties.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/deleteProperty/delete-symbol-properties.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/deleteProperty/deleteProperty.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/deleteProperty/length.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/deleteProperty/name.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/deleteProperty/not-a-constructor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/deleteProperty/return-abrupt-from-property-key.js": "proxy-and-reflect-metaobject",
     "test/built-ins/Reflect/deleteProperty/return-abrupt-from-result.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/deleteProperty/return-boolean.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/get/get.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/get/length.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/get/name.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/get/not-a-constructor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/get/return-abrupt-from-property-key.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/get/return-abrupt-from-result.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/get/return-value-from-receiver.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/get/return-value-from-symbol-key.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/get/return-value.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getOwnPropertyDescriptor/getOwnPropertyDescriptor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getOwnPropertyDescriptor/length.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getOwnPropertyDescriptor/name.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getOwnPropertyDescriptor/not-a-constructor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getOwnPropertyDescriptor/return-abrupt-from-property-key.js": "proxy-and-reflect-metaobject",
     "test/built-ins/Reflect/getOwnPropertyDescriptor/return-abrupt-from-result.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getOwnPropertyDescriptor/return-from-accessor-descriptor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getOwnPropertyDescriptor/return-from-data-descriptor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getOwnPropertyDescriptor/symbol-property.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getOwnPropertyDescriptor/undefined-own-property.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getOwnPropertyDescriptor/undefined-property.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getPrototypeOf/getPrototypeOf.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getPrototypeOf/length.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getPrototypeOf/name.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getPrototypeOf/not-a-constructor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getPrototypeOf/null-prototype.js": "proxy-and-reflect-metaobject",
     "test/built-ins/Reflect/getPrototypeOf/return-abrupt-from-result.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getPrototypeOf/return-prototype.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/getPrototypeOf/skip-own-properties.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/has/has.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/has/length.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/has/name.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/has/not-a-constructor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/has/return-abrupt-from-property-key.js": "proxy-and-reflect-metaobject",
     "test/built-ins/Reflect/has/return-abrupt-from-result.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/has/return-boolean.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/has/symbol-property.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/isExtensible/isExtensible.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/isExtensible/length.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/isExtensible/name.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/isExtensible/not-a-constructor.js": "proxy-and-reflect-metaobject",
     "test/built-ins/Reflect/isExtensible/return-abrupt-from-result.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/isExtensible/return-boolean.js": "proxy-and-reflect-metaobject",
     "test/built-ins/Reflect/ownKeys/return-abrupt-from-result.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/preventExtensions/always-return-true-from-ordinary-object.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/preventExtensions/length.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/preventExtensions/name.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/preventExtensions/not-a-constructor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/preventExtensions/prevent-extensions.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/preventExtensions/preventExtensions.js": "proxy-and-reflect-metaobject",
     "test/built-ins/Reflect/preventExtensions/return-abrupt-from-result.js": "proxy-and-reflect-metaobject",
     "test/built-ins/Reflect/preventExtensions/return-boolean-from-proxy-object.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/call-prototype-property-set.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/creates-a-data-descriptor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/different-property-descriptors.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/length.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/name.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/not-a-constructor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/receiver-is-not-object.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/return-abrupt-from-property-key.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/return-abrupt-from-result.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/return-false-if-receiver-is-not-writable.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/return-false-if-target-is-not-writable.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/set-value-on-accessor-descriptor-with-receiver.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/set-value-on-accessor-descriptor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/set-value-on-data-descriptor.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/set.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/set/symbol-property.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/setPrototypeOf/length.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/setPrototypeOf/name.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/setPrototypeOf/not-a-constructor.js": "proxy-and-reflect-metaobject",
     "test/built-ins/Reflect/setPrototypeOf/return-abrupt-from-result.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/setPrototypeOf/return-false-if-target-and-proto-are-the-same.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/setPrototypeOf/return-false-if-target-is-not-extensible.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/setPrototypeOf/return-false-if-target-is-prototype-of-proto.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/setPrototypeOf/return-true-if-new-prototype-is-set.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/setPrototypeOf/return-true-if-proto-is-current.js": "proxy-and-reflect-metaobject",
-    "test/built-ins/Reflect/setPrototypeOf/setPrototypeOf.js": "proxy-and-reflect-metaobject",
     "test/built-ins/RegExp/15.10.4.1-1.js": "remaining-standard-library-additions",
     "test/built-ins/RegExp/CharacterClassEscapes/character-class-digit-class-escape-negative-cases.js": "regexp-unicode-and-sticky",
     "test/built-ins/RegExp/CharacterClassEscapes/character-class-digit-class-escape-positive-cases.js": "regexp-unicode-and-sticky",

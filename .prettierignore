@@ -64,3 +64,21 @@ tools/test262/es2015-m0-paths.json
 
 # Generated M0 promotion evidence, whose exact bytes are owned by the applied roadmap authority.
 tools/test262/es2015-m0-promotion.json
+
+# Generated M1 baseline evidence, whose exact bytes are owned by the applied roadmap authority.
+tools/test262/es2015-m1-baseline.json
+
+# Generated M1 disposition evidence, whose exact bytes are owned by the applied roadmap authority.
+tools/test262/es2015-m1-disposition.json
+
+# Generated M1 owner-delta evidence, whose exact bytes are owned by the applied roadmap authority.
+tools/test262/es2015-m1-owner-deltas.json
+
+# Generated M1 owner-map evidence, whose exact bytes are owned by the applied roadmap authority.
+tools/test262/es2015-m1-owner-map.json
+
+# Generated M1 path evidence, whose exact bytes are owned by the applied roadmap authority.
+tools/test262/es2015-m1-paths.json
+
+# Generated M1 promotion evidence, whose exact bytes are owned by the applied roadmap authority.
+tools/test262/es2015-m1-promotion.json

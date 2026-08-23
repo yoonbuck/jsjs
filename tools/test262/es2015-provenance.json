@@ -14965,7 +14965,7 @@
       "code": "M1",
       "issue": 80,
       "parentIssue": 70,
-      "state": "pending",
+      "state": "applied",
       "source": {
         "baseTaxonomySha256": "7d366c58f83e635cfe92993f67bab9d6e4d7ef49184cdc7b85b96180cdaf89a4",
         "rootCount": 113,

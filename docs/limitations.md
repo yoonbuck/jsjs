@@ -430,15 +430,17 @@ implementation falls short of what a hosted engine should do. They are written
 down for the same reason the deviations are — an undocumented shortfall is
 indistinguishable from a bug.
 
-### The object internal-method contract is not Reflect or Proxy
+### Proxy, Reflect.enumerate, and immutable prototypes remain outside M1
 
-The runtime now has the Sixth Edition Table 5 object-operation boundary and
-private Table 6 callable/constructor brands. That foundation makes ordinary
-and existing exotic dispatch explicit; it does **not** implement the ES2015
-Reflect API or Proxy construction, traps, revocation, and invariants.
-`Reflect.ownKeys` remains the only exposed Reflect method and `Proxy` remains
-absent. Exact M0 Test262 failures are therefore evidence for the future
-Reflect/Proxy and later semantic owners, not a claim that those features work.
+The runtime exposes the approved ES2015 Reflect methods: `apply`, `construct`,
+`defineProperty`, `deleteProperty`, `get`, `getOwnPropertyDescriptor`,
+`getPrototypeOf`, `has`, `isExtensible`, `ownKeys`, `preventExtensions`, `set`,
+and `setPrototypeOf`, together with `@@toStringTag`. `Reflect.enumerate` is not
+part of the approved pinned-Test262 scope and remains absent.
+
+Proxy construction, traps, revocation, and invariants are still unimplemented.
+The ten Proxy-dependent Reflect roots / 20 variants remain assigned to issue
+#81 instead of being counted as M1 support.
 
 Immutable Prototype Exotic Object behavior for `Object.prototype` also remains
 outside this foundation. In particular, non-circular prototype replacements
@@ -447,9 +449,15 @@ target is `Object.prototype`.
 
 **Backing code:** `src/runtime/object.js`, `src/runtime/capabilities.js`,
 `src/builtins/reflect.js`.
-**Verification:** the exact UTC M0 command documented in
-[`docs/testing.md`](testing.md#exact-m0-object-internal-method-evidence-79)
-records only the reviewed 240-root ledger.
+**Verification:** the exact UTC M1 command documented in
+[`docs/testing.md`](testing.md#exact-m1-reflect-evidence-80) records the
+reviewed 113-root ledger and leaves only those ten Proxy-dependent residuals.
+
+### Proper tail calls are not implemented
+
+Mandatory ES2015 proper tail calls remain assigned to issue #97. Ordinary and
+constructor calls still consume the host stack; the Reflect work adds neither
+tail-position detection nor reusable tail-call frames.
 
 ### Well-known symbols are defined but only @@toPrimitive, @@toStringTag, @@iterator and @@species are honoured
 

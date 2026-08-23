@@ -100,6 +100,9 @@ const SELECTION_FILE = 'tools/test262/es5-selection.json';
 const REPORT_FILE = 'docs/test262-report.jsonl';
 const CONFORMANCE_FILE = 'docs/conformance.md';
 const FEATURES_FILE = 'tools/test262/features.json';
+const PROVENANCE_FILE = 'tools/test262/es2015-provenance.json';
+const M1_BASELINE_FILE = 'tools/test262/es2015-m1-baseline.json';
+const M1_DISPOSITION_FILE = 'tools/test262/es2015-m1-disposition.json';
 const M1_SELECTION_BASE_SHA256 =
   '533e0b9fc165a026d64c4e64d783cf2585de7236600acacf228f06d27f23d8c8';
 const M1_SELECTION_HEAD_SHA256 =
@@ -1071,6 +1074,111 @@ export function verifyM1Ledger(text, taxonomy) {
 }
 
 /**
+ * @param {{
+ *   taxonomyText: string,
+ *   baselineText: string,
+ *   dispositionText: string,
+ *   provenanceText: string,
+ * }} options
+ */
+export function reconstructAppliedM1SourceTaxonomy(options) {
+  const manifest = JSON.parse(options.provenanceText);
+  const authority = manifest.roadmapAuthorities?.find(
+    (/** @type {any} */ entry) => entry.code === 'M1',
+  );
+  if (
+    authority === undefined ||
+    authority.state !== 'applied' ||
+    authority.reconciliation !== null
+  ) {
+    throw new Error('Focused M1 execution requires the applied M1 authority');
+  }
+  const evidenceByPath = new Map(
+    authority.evidence.map((/** @type {any} */ entry) => [entry.path, entry]),
+  );
+  if (
+    sha256(options.baselineText) !==
+      evidenceByPath.get(M1_BASELINE_FILE)?.sha256 ||
+    sha256(options.dispositionText) !==
+      evidenceByPath.get(M1_DISPOSITION_FILE)?.sha256
+  ) {
+    throw new Error('Focused M1 execution evidence does not match authority');
+  }
+
+  const baseline = JSON.parse(options.baselineText);
+  const disposition = JSON.parse(options.dispositionText);
+  const destinations = disposition?.destinations;
+  if (
+    !Array.isArray(baseline) ||
+    !Array.isArray(destinations) ||
+    baseline.length !== M1.roots ||
+    destinations.length !== M1.roots
+  ) {
+    throw new Error('Focused M1 execution evidence has the wrong root count');
+  }
+  const paths = baseline.map((/** @type {any} */ entry) => entry.path);
+  if (
+    authority.source.rootCount !== M1.roots ||
+    authority.source.variantCount !== M1.variants ||
+    authority.source.pathSha256 !== M1.sha256 ||
+    paths.some(
+      (/** @type {string} */ sourcePath, /** @type {number} */ index) =>
+        destinations[index]?.path !== sourcePath,
+    ) ||
+    sha256(`${paths.join('\n')}\n`) !== M1.sha256 ||
+    baseline.reduce(
+      (/** @type {number} */ total, /** @type {any} */ entry) =>
+        total + entry.variants,
+      0,
+    ) !== M1.variants
+  ) {
+    throw new Error(
+      'Focused M1 execution evidence has the wrong source identity',
+    );
+  }
+
+  const taxonomy = JSON.parse(options.taxonomyText);
+  if (!Array.isArray(taxonomy.classifications)) {
+    throw new Error('Focused M1 execution requires taxonomy classifications');
+  }
+  const currentByPath = new Map(
+    taxonomy.classifications.map((/** @type {any} */ entry) => [
+      entry.path,
+      entry,
+    ]),
+  );
+  const baselineByPath = new Map();
+  for (let index = 0; index < baseline.length; index += 1) {
+    const source = baseline[index];
+    const destination = destinations[index];
+    const current = currentByPath.get(source.path);
+    if (
+      current === undefined ||
+      current.status !== destination.status ||
+      current.blocker !== destination.blocker
+    ) {
+      throw new Error(`Focused M1 applied taxonomy mismatch: ${source.path}`);
+    }
+    const stableSource = { ...source };
+    const stableCurrent = { ...current };
+    Reflect.deleteProperty(stableSource, 'status');
+    Reflect.deleteProperty(stableSource, 'blocker');
+    Reflect.deleteProperty(stableCurrent, 'status');
+    Reflect.deleteProperty(stableCurrent, 'blocker');
+    if (JSON.stringify(stableSource) !== JSON.stringify(stableCurrent)) {
+      throw new Error(`Focused M1 applied taxonomy drift: ${source.path}`);
+    }
+    baselineByPath.set(source.path, source);
+  }
+  return {
+    ...taxonomy,
+    classifications: taxonomy.classifications.map(
+      (/** @type {any} */ entry) => baselineByPath.get(entry.path) ?? entry,
+    ),
+  };
+}
+
+/**
  * @param {readonly M1ExecutionRecord[]} records
  * @param {readonly string[]} paths
  * @param {ReadonlyMap<string, M1Classification>} classifications
@@ -1343,23 +1451,48 @@ function parseM1Options(argv) {
  * @param {Record<string, string | undefined>} environment
  */
 async function executeM1Corpus(options, environment) {
-  const [ledgerPath, taxonomyPath, outputPath] = await Promise.all([
+  const [
+    ledgerPath,
+    taxonomyPath,
+    baselinePath,
+    dispositionPath,
+    provenancePath,
+    outputPath,
+  ] = await Promise.all([
     resolveM1InputPath(REPOSITORY_ROOT_URL, options.ledger),
     resolveM1InputPath(REPOSITORY_ROOT_URL, TAXONOMY_FILE),
+    resolveM1InputPath(REPOSITORY_ROOT_URL, M1_BASELINE_FILE),
+    resolveM1InputPath(REPOSITORY_ROOT_URL, M1_DISPOSITION_FILE),
+    resolveM1InputPath(REPOSITORY_ROOT_URL, PROVENANCE_FILE),
     resolveM1OutputPath(REPOSITORY_ROOT_URL, options.output),
   ]);
   const pin = await readTest262Pin(REPOSITORY_ROOT_URL);
   await assertPinnedCheckout(pin, REPOSITORY_ROOT_URL);
-  const [ledgerText, taxonomyText] = await Promise.all([
+  const [
+    ledgerText,
+    taxonomyText,
+    baselineText,
+    dispositionText,
+    provenanceText,
+  ] = await Promise.all([
     readFile(ledgerPath, 'utf8'),
     readFile(taxonomyPath, 'utf8'),
+    readFile(baselinePath, 'utf8'),
+    readFile(dispositionPath, 'utf8'),
+    readFile(provenancePath, 'utf8'),
   ]);
+  const taxonomy = reconstructAppliedM1SourceTaxonomy({
+    taxonomyText,
+    baselineText,
+    dispositionText,
+    provenanceText,
+  });
   let document;
   try {
     document = await runM1Focused({
       environment,
       ledgerText,
-      taxonomy: JSON.parse(taxonomyText),
+      taxonomy,
       pin,
       host: createNodeTest262Host({
         root: new URL(

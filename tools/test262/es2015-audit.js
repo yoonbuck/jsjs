@@ -99,6 +99,7 @@ const PROVENANCE_DECISIONS_DIRECTORY =
 const ES2015_H0_PATHS_FILE = 'tools/test262/es2015-h0-paths.json';
 const ES2015_M0_DISPOSITION_FILE = 'tools/test262/es2015-m0-disposition.json';
 const ES2015_M0_PROMOTION_FILE = 'tools/test262/es2015-m0-promotion.json';
+const ES2015_M1_DISPOSITION_FILE = 'tools/test262/es2015-m1-disposition.json';
 const H0_AUDIT_RECONCILIATION_BASE_COMMIT =
   '144f49f7bde1179d1b1d523f5048eca70c54a9de';
 const AUDIT_EVIDENCE_KEYS = Object.freeze([
@@ -244,6 +245,14 @@ export async function main(argv = [], dependencies = {}) {
     (/** @type {any} */ authority) =>
       authority.code === 'M0' && authority.state === 'applied',
   );
+  const m1Authority = roadmapAuthorities.find(
+    (/** @type {any} */ authority) =>
+      authority.code === 'M1' && authority.state === 'applied',
+  );
+  const m1DispositionText =
+    m1Authority === undefined
+      ? null
+      : await deps.readFile(ES2015_M1_DISPOSITION_FILE);
   const [m0DispositionText, m0PromotionText] =
     m0Authority === undefined
       ? [null, null]
@@ -266,6 +275,25 @@ export async function main(argv = [], dependencies = {}) {
     ) {
       throw new Es2015AuditError(
         'Applied M0 taxonomy inputs do not match their roadmap authority',
+      );
+    }
+  }
+  if (m1Authority !== undefined) {
+    const evidenceByPath = new Map(
+      m1Authority.evidence.map((/** @type {any} */ entry) => [
+        entry.path,
+        entry,
+      ]),
+    );
+    if (
+      sha256(/** @type {string} */ (m1DispositionText)) !==
+        evidenceByPath.get(ES2015_M1_DISPOSITION_FILE)?.sha256 ||
+      m1PromotionText === null ||
+      sha256(m1PromotionText) !==
+        evidenceByPath.get(ES2015_M1_PROMOTION_FILE)?.sha256
+    ) {
+      throw new Es2015AuditError(
+        'Applied M1 taxonomy inputs do not match their roadmap authority',
       );
     }
   }
@@ -495,6 +523,7 @@ export async function main(argv = [], dependencies = {}) {
     h0PromotionText,
     m0DispositionText,
     m0PromotionText,
+    m1DispositionText,
     classifications,
   });
   validateArtifact(artifact);
@@ -710,7 +739,7 @@ export async function validateDefaultH0AuditReconciliation(options) {
       H0_AUDIT_RECONCILIATION_BASE_COMMIT,
     ),
   ]);
-  const afterTaxonomyText = await taxonomyBeforeM0Authority({
+  const afterTaxonomyText = await taxonomyBeforeAppliedRoadmapAuthorities({
     afterTaxonomyText: options.afterTaxonomyText,
     readFile: options.readFile,
     roadmapAuthorities: options.roadmapAuthorities ?? [],
@@ -731,8 +760,8 @@ export async function validateDefaultH0AuditReconciliation(options) {
 }
 
 /**
- * Reconstructs the exact pre-M0 classifications for the historical H0 proof
- * while independently validating the applied M0 projection.
+ * Reconstructs exact pre-roadmap classifications for the historical H0 proof
+ * while independently validating applied projections in reverse order.
  *
  * @param {{
  *   afterTaxonomyText: string,
@@ -740,32 +769,69 @@ export async function validateDefaultH0AuditReconciliation(options) {
  *   roadmapAuthorities: readonly Record<string, any>[],
  * }} options
  */
-async function taxonomyBeforeM0Authority(options) {
-  const authority = options.roadmapAuthorities.find(
-    (candidate) => candidate.code === 'M0' && candidate.state === 'applied',
-  );
-  if (authority === undefined) return options.afterTaxonomyText;
+async function taxonomyBeforeAppliedRoadmapAuthorities(options) {
+  let taxonomyText = options.afterTaxonomyText;
+  for (const evidence of [
+    {
+      code: 'M1',
+      baselinePath: 'tools/test262/es2015-m1-baseline.json',
+      dispositionPath: 'tools/test262/es2015-m1-disposition.json',
+    },
+    {
+      code: 'M0',
+      baselinePath: 'tools/test262/es2015-m0-baseline.json',
+      dispositionPath: 'tools/test262/es2015-m0-disposition.json',
+    },
+  ]) {
+    const authority = options.roadmapAuthorities.find(
+      (candidate) =>
+        candidate.code === evidence.code && candidate.state === 'applied',
+    );
+    if (authority === undefined) continue;
+    taxonomyText = await taxonomyBeforeAppliedRoadmapAuthority({
+      taxonomyText,
+      readFile: options.readFile,
+      authority,
+      ...evidence,
+    });
+  }
+  return taxonomyText;
+}
+
+/**
+ * @param {{
+ *   taxonomyText: string,
+ *   readFile?: AuditDependencies['readFile'],
+ *   authority: Record<string, any>,
+ *   code: string,
+ *   baselinePath: string,
+ *   dispositionPath: string,
+ * }} options
+ */
+async function taxonomyBeforeAppliedRoadmapAuthority(options) {
   if (options.readFile === undefined) {
     throw new Es2015AuditError(
-      'Applied M0 H0 reconciliation requires tracked authority evidence',
+      `Applied ${options.code} H0 reconciliation requires tracked authority evidence`,
     );
   }
 
-  const baselinePath = 'tools/test262/es2015-m0-baseline.json';
-  const dispositionPath = 'tools/test262/es2015-m0-disposition.json';
   const evidenceByPath = new Map(
-    authority.evidence.map((/** @type {any} */ entry) => [entry.path, entry]),
+    options.authority.evidence.map((/** @type {any} */ entry) => [
+      entry.path,
+      entry,
+    ]),
   );
   const [baselineText, dispositionText] = await Promise.all([
-    options.readFile(baselinePath),
-    options.readFile(dispositionPath),
+    options.readFile(options.baselinePath),
+    options.readFile(options.dispositionPath),
   ]);
   if (
-    sha256(baselineText) !== evidenceByPath.get(baselinePath)?.sha256 ||
-    sha256(dispositionText) !== evidenceByPath.get(dispositionPath)?.sha256
+    sha256(baselineText) !== evidenceByPath.get(options.baselinePath)?.sha256 ||
+    sha256(dispositionText) !==
+      evidenceByPath.get(options.dispositionPath)?.sha256
   ) {
     throw new Es2015AuditError(
-      'Applied M0 H0 reconciliation evidence does not match its authority',
+      `Applied ${options.code} H0 reconciliation evidence does not match its authority`,
     );
   }
 
@@ -775,11 +841,11 @@ async function taxonomyBeforeM0Authority(options) {
   if (
     !Array.isArray(baseline) ||
     !Array.isArray(destinations) ||
-    baseline.length !== authority.source.rootCount ||
-    destinations.length !== authority.source.rootCount
+    baseline.length !== options.authority.source.rootCount ||
+    destinations.length !== options.authority.source.rootCount
   ) {
     throw new Es2015AuditError(
-      'Applied M0 H0 reconciliation evidence has the wrong root count',
+      `Applied ${options.code} H0 reconciliation evidence has the wrong root count`,
     );
   }
   const paths = baseline.map((/** @type {any} */ entry) => entry.path);
@@ -788,22 +854,22 @@ async function taxonomyBeforeM0Authority(options) {
       (/** @type {string} */ path, /** @type {number} */ index) =>
         destinations[index]?.path !== path,
     ) ||
-    sha256(`${paths.join('\n')}\n`) !== authority.source.pathSha256 ||
+    sha256(`${paths.join('\n')}\n`) !== options.authority.source.pathSha256 ||
     baseline.reduce(
       (/** @type {number} */ total, /** @type {any} */ entry) =>
         total + entry.variants,
       0,
-    ) !== authority.source.variantCount
+    ) !== options.authority.source.variantCount
   ) {
     throw new Es2015AuditError(
-      'Applied M0 H0 reconciliation evidence has the wrong source identity',
+      `Applied ${options.code} H0 reconciliation evidence has the wrong source identity`,
     );
   }
 
-  const after = JSON.parse(options.afterTaxonomyText);
+  const after = JSON.parse(options.taxonomyText);
   if (!Array.isArray(after.classifications)) {
     throw new Es2015AuditError(
-      'Applied M0 H0 reconciliation requires taxonomy classifications',
+      `Applied ${options.code} H0 reconciliation requires taxonomy classifications`,
     );
   }
   const afterByPath = new Map(
@@ -823,14 +889,14 @@ async function taxonomyBeforeM0Authority(options) {
       current.blocker !== destination.blocker
     ) {
       throw new Es2015AuditError(
-        `Applied M0 taxonomy projection mismatch: ${source.path}`,
+        `Applied ${options.code} taxonomy projection mismatch: ${source.path}`,
       );
     }
-    const sourceStable = stableM0Classification(source);
-    const currentStable = stableM0Classification(current);
+    const sourceStable = stableRoadmapClassification(source);
+    const currentStable = stableRoadmapClassification(current);
     if (JSON.stringify(sourceStable) !== JSON.stringify(currentStable)) {
       throw new Es2015AuditError(
-        `Applied M0 taxonomy projection drift: ${source.path}`,
+        `Applied ${options.code} taxonomy projection drift: ${source.path}`,
       );
     }
     baselineByPath.set(source.path, source);
@@ -843,7 +909,7 @@ async function taxonomyBeforeM0Authority(options) {
 }
 
 /** @param {Record<string, any>} entry */
-function stableM0Classification(entry) {
+function stableRoadmapClassification(entry) {
   const stable = { ...entry };
   Reflect.deleteProperty(stable, 'status');
   Reflect.deleteProperty(stable, 'blocker');
@@ -1332,6 +1398,15 @@ async function synchronizePromotedReport(options) {
   const standardPromotionPaths = new Set(
     standardPromotions.flatMap((candidate) => promotionPaths(candidate)),
   );
+  const m1PromotionPaths = new Set(
+    standardPromotions
+      .filter(
+        (candidate) =>
+          'groupName' in candidate &&
+          candidate.groupName === M1_PROMOTION_GROUP,
+      )
+      .flatMap((candidate) => promotionPaths(candidate)),
+  );
   const h0PromotionPaths = new Set(
     h0Promotion === null ? [] : promotionPaths(h0Promotion),
   );
@@ -1387,14 +1462,18 @@ async function synchronizePromotedReport(options) {
         `${ES2015_AUDIT_EVIDENCE_FILE} names a foreign promotion root ${path}`,
       );
     }
-    // Taxonomy normalizes feature sets, but broad runner records preserve source order.
+    // Legacy broad records preserve source order; M1 report bytes use the
+    // authority-owned canonical feature order.
     const metadata = parseTest262Metadata(await deps.readRoot(path));
     if (!sameStrings(sortStrings(metadata.features), entry.features)) {
       throw new Es2015AuditError(
         `${ES2015_PROMOTION_FILE} metadata dependencies drifted for ${path}`,
       );
     }
-    rawPromotionFeatures.set(path, metadata.features);
+    rawPromotionFeatures.set(
+      path,
+      m1PromotionPaths.has(path) ? entry.features : metadata.features,
+    );
   }
   const promotedRecords = promotionEvidence.map((record) => {
     const features = rawPromotionFeatures.get(record.file);
@@ -2666,6 +2745,7 @@ function recordsByPath(records, name) {
  *   h0PromotionText?: string | null,
  *   m0DispositionText?: string | null,
  *   m0PromotionText?: string | null,
+ *   m1DispositionText?: string | null,
  *   classifications: readonly any[],
  * }} options
  */
@@ -2693,9 +2773,6 @@ function buildArtifact(options) {
       ...(options.promotionText === null
         ? {}
         : { promotionSha256: sha256(options.promotionText) }),
-      ...(options.m1PromotionText == null
-        ? {}
-        : { m1PromotionSha256: sha256(options.m1PromotionText) }),
       ...(options.h0DispositionText == null
         ? {}
         : { h0DispositionSha256: sha256(options.h0DispositionText) }),
@@ -2708,6 +2785,12 @@ function buildArtifact(options) {
       ...(options.m0PromotionText == null
         ? {}
         : { m0PromotionSha256: sha256(options.m0PromotionText) }),
+      ...(options.m1DispositionText == null
+        ? {}
+        : { m1DispositionSha256: sha256(options.m1DispositionText) }),
+      ...(options.m1PromotionText == null
+        ? {}
+        : { m1PromotionSha256: sha256(options.m1PromotionText) }),
     },
     summary,
     statusTables: statusTables(options.classifications),

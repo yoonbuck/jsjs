@@ -1449,22 +1449,28 @@ export default [
   {
     name: 'checked-in ES2015 promotions exactly match their durable ledgers and generated subset groups',
     run: async () => {
-      const [promotionText, h0PromotionText, subsetText] = await Promise.all([
-        readFile(
-          new URL('tools/test262/es2015-promotion.json', REPOSITORY_ROOT),
-          'utf8',
-        ),
-        readFile(
-          new URL('tools/test262/es2015-h0-promotion.json', REPOSITORY_ROOT),
-          'utf8',
-        ),
-        readFile(
-          new URL('tools/test262/upstream-subset.json', REPOSITORY_ROOT),
-          'utf8',
-        ),
-      ]);
+      const [promotionText, h0PromotionText, m1PromotionText, subsetText] =
+        await Promise.all([
+          readFile(
+            new URL('tools/test262/es2015-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/es2015-h0-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/es2015-m1-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/upstream-subset.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+        ]);
       const manifest = parseEs2015Promotion(promotionText);
       const h0Manifest = parseEs2015Promotion(h0PromotionText);
+      const m1Manifest = parseEs2015Promotion(m1PromotionText);
       const subset = parseUpstreamSubset(subsetText);
       const promotion = subset.groups.filter(
         (group) => group.name === 'es2015/audit-passing-promotion',
@@ -1472,13 +1478,18 @@ export default [
       const h0Promotion = subset.groups.filter(
         (group) => group.name === ES2015_H0_PROMOTION_GROUP,
       );
+      const m1Promotion = subset.groups.filter(
+        (group) => group.name === 'es2015/m1-reflect',
+      );
       const preExistingGroups = subset.groups.filter(
         (group) =>
           group.name !== 'es2015/audit-passing-promotion' &&
-          group.name !== ES2015_H0_PROMOTION_GROUP,
+          group.name !== ES2015_H0_PROMOTION_GROUP &&
+          group.name !== 'es2015/m1-reflect',
       );
       const paths = promotionPaths(manifest);
       const h0Paths = promotionPaths(h0Manifest);
+      const m1Paths = promotionPaths(m1Manifest);
 
       assertSame(manifest.rootCount, 6323);
       assertSame(manifest.variantCount, 11955);
@@ -1491,6 +1502,11 @@ export default [
       assertSame(
         JSON.stringify(h0Promotion[0]?.paths),
         JSON.stringify(h0Paths),
+      );
+      assertSame(m1Promotion.length, 1);
+      assertSame(
+        JSON.stringify(m1Promotion[0]?.paths),
+        JSON.stringify(m1Paths),
       );
       assertSame(
         JSON.stringify(

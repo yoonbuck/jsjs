@@ -436,12 +436,14 @@ BASE-byte-identical. The detached old BASE checker does not recognize this
 marker and must continue to report that the provenance-owned range lacks an
 authoritative marker.
 
-### One-use M1 authority repair (#80)
+### Historical one-use M1 authority repair (#80)
 
-The pending M1 authority is repaired through one exact HEAD-checker range
-rooted at `554afc367657439d116d23f4477bb24787a0e261`. M1 stays `pending`: this
-range changes no authority evidence file, protected-output byte, runtime file,
-workflow, pipeline, policy, feature manifest, or decision fragment.
+The pending M1 authority was corrected through one exact HEAD-checker range
+rooted at `554afc367657439d116d23f4477bb24787a0e261` and merged as
+`44c2a747ee544fb85403380f86dc6a0e126faceb`. M1 remained `pending`: the repair
+changed no authority evidence file, protected-output byte, runtime file,
+workflow, pipeline, policy, feature manifest, or decision fragment. This
+exception is now historical and is not a normal authority-consumption marker.
 
 An ordinary unprivileged `pull_request` body may contain this exact LF-only
 marker:
@@ -501,14 +503,11 @@ Only that old-trust-root failure may receive an explicit administrator-reviewed
 merge exception. No other CI, CodeQL, warning, extraction, or test failure is
 waivable.
 
-Local repair validation is limited to the focused provenance test, typecheck,
-scoped lint/format, `npm run ci:check`, exact range checks, and
-`git diff --check`. Do not run `npm test`, broad/full Test262,
-`npm run test262:upstream`, `npm run test262:upstream:check`,
-`npm run ci:contract`, or full Node/browser/JSC suites for this repair. After
-the exact repair is squash-merged and main is verified, rebuild the semantic M1
-consumer from the corrected pending authority and consume it through the normal
-`roadmap-reclassification:M1` path.
+The repair's local validation was limited to the focused provenance test,
+typecheck, scoped lint/format, `npm run ci:check`, exact range checks, and
+`git diff --check`. Its marker must not be reused: the corrected authority is
+consumed only through the normal `roadmap-reclassification:M1` marker documented
+below.
 
 ### Deterministic ES2015 taxonomy and exact promotion
 
@@ -648,6 +647,79 @@ Destinations owned by issues #80 and #81 retain the existing
 `proxy-and-reflect-metaobject` blocker. The issue number distinguishes the
 Reflect and Proxy follow-up ownership; no issue-specific blocker names are
 introduced.
+
+### Exact M1 Reflect evidence (#80)
+
+The immutable M1 ledger is
+[`tools/test262/es2015-m1-paths.txt`](../tools/test262/es2015-m1-paths.txt):
+113 code-unit-sorted, newline-terminated Reflect roots, 226 executable variants,
+and SHA-256
+`65529ed8f9bdf88576314e95f4f164ac2c613e9ec44f0aae042a79aa5f8706b4`.
+Run only the bounded UTC entry point with that exact ledger and an ignored
+repository-relative output:
+
+```sh
+TZ=UTC npm run test262:es2015:m1 -- \
+  --ledger=tools/test262/es2015-m1-paths.txt \
+  --output=.superpowers/issue-80/m1/execution.json
+```
+
+The reviewed result is 103 complete-pass roots / 206 variants and ten
+Proxy-dependent residual roots / 20 variants. Twelve promoted
+`not-a-constructor.js` roots have the exact transitive include closure
+`["Reflect.construct"]`; the other 91 promoted roots have an empty closure.
+The promotion SHA-256 is
+`31f807a05d56d35762cd5457f779624df04f11ef482b3d1bcb60be3a06883c69`.
+
+Preparation produced six canonical evidence files: paths, baseline,
+disposition, owner deltas, owner map, and promotion. The normal consumer adds
+those six exact files, replaces the audit evidence and ES5 selection exactly,
+and projects the generated conformance block, selected report, taxonomy, and
+upstream subset. Those are the authority's 12 protected outputs: six
+`add-exact`, two `replace-exact`, and four `project`. The corrected taxonomy
+SHA-256 is
+`fba700539b05edd67b6cf67e4c0a1361398a2d0f04212bc7080a83f44abf577a`;
+the corrected selection SHA-256 is
+`78ac694beb258be0b67c7788137c736b0b30cf7457e3a903d364d38c038b48df`;
+and the aggregate protected projection is
+`22bf654462044eb3febfbcec43e1c56a20cd89392c763e8d141fd6f3274289ed`.
+
+The selection projection removes exactly these seven obsolete exclusions:
+
+1. `vendor/test262/test/built-ins/Object/internals/DefineOwnProperty/consistent-value-function-arguments.js`
+2. `vendor/test262/test/built-ins/Object/internals/DefineOwnProperty/consistent-value-function-caller.js`
+3. `vendor/test262/test/built-ins/Object/internals/DefineOwnProperty/consistent-value-regexp-dollar1.js`
+4. `vendor/test262/test/built-ins/Object/internals/DefineOwnProperty/consistent-writable-regexp-dollar1.js`
+5. `vendor/test262/test/staging/sm/Array/unshift-with-enumeration.js`
+6. `vendor/test262/test/staging/sm/object/bug-1206700.js`
+7. `vendor/test262/test/staging/sm/strict/primitive-assignment.js`
+
+The promoted M1 group adds no new path to the selected union: the subset remains
+20,595 unique paths in 61 groups, with SHA-256
+`9f768aa8fb0c473e98fe2156d290c4207cea797302cccad6f9b1b922a36b37c0`.
+Applied-authority audit reconstruction validates and reverses M1 before M0 so
+the historical H0 proof still sees the exact pre-roadmap classifications.
+
+Consumption changes only M1 from `pending` to `applied` and uses this normal
+LF-only marker; it never reuses the historical repair exception:
+
+```text
+<!-- es2015-roadmap-authority-consume
+parent:70
+code:M1
+issue:80
+profile:roadmap-reclassification:M1
+base:44c2a747ee544fb85403380f86dc6a0e126faceb
+source-path-sha256:65529ed8f9bdf88576314e95f4f164ac2c613e9ec44f0aae042a79aa5f8706b4
+source-entry-sha256:null
+protected-projection-sha256:22bf654462044eb3febfbcec43e1c56a20cd89392c763e8d141fd6f3274289ed
+-->
+```
+
+Local M1 validation must stay focused. Do not run `npm test`, full or broad
+Test262, `npm run test262:upstream`, `npm run test262:upstream:check`,
+`npm run test262:es2015-release`, `npm run ci:contract`, or full
+Node/browser/JSC suites. Exact-head CI owns configured broad execution.
 
 ### Focused ES2015 syntax suite
 

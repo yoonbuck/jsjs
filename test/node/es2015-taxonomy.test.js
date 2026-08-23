@@ -138,6 +138,7 @@ const AUDIT_ROOTS = new Map([
 ]);
 const AUDIT_EVIDENCE_PATH = 'tools/test262/es2015-audit-evidence.json';
 const H0_REPAIRED_BASE = '144f49f7bde1179d1b1d523f5048eca70c54a9de';
+const M0_PRECONSUMER = '380d9449147f32cf5368bf6abb8f3a081d603c12';
 const REAL_AUDIT_SELECTED = 'test/built-ins/Array/15.4.5-1.js';
 const REAL_AUDIT_UNSELECTED =
   'test/built-ins/Array/from/items-is-null-throws.js';
@@ -195,6 +196,11 @@ function readRepositoryGitFile(revision, path) {
     maxBuffer: 64 * 1024 * 1024,
   });
   return result.status === 0 ? result.stdout : null;
+}
+
+/** @param {string} revision @param {string} path */
+async function readRepositoryGitFileAsync(revision, path) {
+  return readRepositoryGitFile(revision, path);
 }
 
 function productionH0AuditReconciliationFixture() {
@@ -1926,6 +1932,148 @@ export default [
     },
   },
   {
+    name: 'ES2015 audit reverses applied M1 before M0 for the historical H0 proof',
+    run: async () => {
+      const fixture = productionH0AuditReconciliationFixture();
+      /** @type {string[]} */
+      const evidenceReads = [];
+      await validateDefaultH0AuditReconciliation({
+        ...fixture,
+        readFile: async (path) => {
+          evidenceReads.push(path);
+          return fixture.readFile(path);
+        },
+        readGitFile: readRepositoryGitFileAsync,
+      });
+      assertSame(
+        JSON.stringify(evidenceReads),
+        JSON.stringify([
+          'tools/test262/es2015-m1-baseline.json',
+          'tools/test262/es2015-m1-disposition.json',
+          'tools/test262/es2015-m0-baseline.json',
+          'tools/test262/es2015-m0-disposition.json',
+        ]),
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit leaves taxonomy unchanged when no roadmap authority is applied',
+    run: async () => {
+      const fixture = productionH0AuditReconciliationFixture();
+      const afterTaxonomyText = readRepositoryGitFile(
+        M0_PRECONSUMER,
+        AUDIT_PATH,
+      );
+      if (afterTaxonomyText === null) {
+        throw new Error('repaired H0 taxonomy history is unavailable');
+      }
+      await validateDefaultH0AuditReconciliation({
+        ...fixture,
+        roadmapAuthorities: [],
+        afterTaxonomyText,
+        readFile: async () => {
+          throw new Error('absent authorities must not read roadmap evidence');
+        },
+        readGitFile: readRepositoryGitFileAsync,
+      });
+    },
+  },
+  {
+    name: 'ES2015 audit rejects applied M1 evidence that differs from its authority',
+    run: async () => {
+      const fixture = productionH0AuditReconciliationFixture();
+      const error = await rejected(() =>
+        validateDefaultH0AuditReconciliation({
+          ...fixture,
+          readFile: async (path) =>
+            path === 'tools/test262/es2015-m1-baseline.json'
+              ? `${await fixture.readFile(path)} `
+              : fixture.readFile(path),
+          readGitFile: readRepositoryGitFileAsync,
+        }),
+      );
+      assertSame(error instanceof Es2015AuditError, true);
+      assertSame(
+        error.message,
+        'Applied M1 H0 reconciliation evidence does not match its authority',
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit rejects an applied M1 destination that differs from tracked taxonomy',
+    run: async () => {
+      const fixture = productionH0AuditReconciliationFixture();
+      const dispositionPath = 'tools/test262/es2015-m1-disposition.json';
+      const disposition = JSON.parse(await fixture.readFile(dispositionPath));
+      const destination = disposition.destinations.find(
+        (/** @type {any} */ entry) => entry.status === 'selected-passing',
+      );
+      if (destination === undefined) {
+        throw new Error('M1 selected destination fixture is unavailable');
+      }
+      destination.status = 'blocked:proxy-and-reflect-metaobject';
+      destination.blocker = 'proxy-and-reflect-metaobject';
+      const dispositionText = `${JSON.stringify(disposition, null, 2)}\n`;
+      const roadmapAuthorities = globalThis.structuredClone(
+        fixture.roadmapAuthorities,
+      );
+      const authority = roadmapAuthorities.find(
+        (/** @type {any} */ entry) => entry.code === 'M1',
+      );
+      const dispositionEvidence = authority?.evidence.find(
+        (/** @type {any} */ entry) => entry.path === dispositionPath,
+      );
+      if (dispositionEvidence === undefined) {
+        throw new Error('M1 disposition authority evidence is unavailable');
+      }
+      dispositionEvidence.sha256 = sha256(dispositionText);
+      const error = await rejected(() =>
+        validateDefaultH0AuditReconciliation({
+          ...fixture,
+          roadmapAuthorities,
+          readFile: async (path) =>
+            path === dispositionPath ? dispositionText : fixture.readFile(path),
+          readGitFile: readRepositoryGitFileAsync,
+        }),
+      );
+      assertSame(error instanceof Es2015AuditError, true);
+      assertSame(
+        error.message,
+        `Applied M1 taxonomy projection mismatch: ${destination.path}`,
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit rejects foreign stable-field drift in an applied M1 classification',
+    run: async () => {
+      const fixture = productionH0AuditReconciliationFixture();
+      const baseline = JSON.parse(
+        await fixture.readFile('tools/test262/es2015-m1-baseline.json'),
+      );
+      const sourcePath = baseline[0]?.path;
+      const taxonomy = JSON.parse(fixture.afterTaxonomyText);
+      const current = taxonomy.classifications.find(
+        (/** @type {any} */ entry) => entry.path === sourcePath,
+      );
+      if (current === undefined) {
+        throw new Error('M1 taxonomy classification fixture is unavailable');
+      }
+      current.provenance = [...current.provenance, 'foreign-m1-drift'];
+      const error = await rejected(() =>
+        validateDefaultH0AuditReconciliation({
+          ...fixture,
+          afterTaxonomyText: `${JSON.stringify(taxonomy, null, 2)}\n`,
+          readGitFile: readRepositoryGitFileAsync,
+        }),
+      );
+      assertSame(error instanceof Es2015AuditError, true);
+      assertSame(
+        error.message,
+        `Applied M1 taxonomy projection drift: ${sourcePath}`,
+      );
+    },
+  },
+  {
     name: 'ES2015 audit default H0 reconciliation fails explicitly when preserved Git history is unavailable',
     run: async () => {
       const error = await rejected(() =>
@@ -2641,10 +2789,21 @@ export default [
   {
     name: 'ES2015 audit composes optional M1 promotion records from audit evidence',
     run: async () => {
+      const m1Promotion = JSON.stringify({
+        ...JSON.parse(AUDIT_M1_PROMOTION),
+        entries: [
+          {
+            path: AUDIT_M1_PATH,
+            variants: 2,
+            features: ['m1-a-feature', 'm1-z-feature'],
+            includeFeatures: ['m1-include-feature'],
+          },
+        ],
+      });
       const roots = new Map(AUDIT_ROOTS);
       roots.set(
         AUDIT_M1_PATH,
-        '/*---\ndescription: M1 promotion fixture.\nes6id: 26.1\nfeatures: [m1-feature]\nincludes: [m1Helper.js]\n---*/\n',
+        '/*---\ndescription: M1 promotion fixture.\nes6id: 26.1\nfeatures: [m1-z-feature, m1-a-feature]\nincludes: [m1Helper.js]\n---*/\n',
       );
       const dependencies = auditDependencies({
         roots,
@@ -2661,11 +2820,11 @@ export default [
             'tools/test262/es2015-policy.json',
             JSON.stringify({
               ...JSON.parse(POLICY),
-              es2015Features: ['let', 'm1-feature'],
+              es2015Features: ['let', 'm1-a-feature', 'm1-z-feature'],
               neutralFeatures: ['cross-realm', 'm1-include-feature'],
             }),
           ],
-          ['tools/test262/es2015-m1-promotion.json', AUDIT_M1_PROMOTION],
+          ['tools/test262/es2015-m1-promotion.json', m1Promotion],
           ['docs/conformance.md', AUDIT_COVERAGE_DOCUMENT],
         ]),
       });
@@ -2699,7 +2858,7 @@ export default [
               record.file === AUDIT_M1_PATH && record.variant === 'non-strict',
           )?.features,
         ),
-        '["m1-feature"]',
+        '["m1-a-feature","m1-z-feature"]',
       );
     },
   },
