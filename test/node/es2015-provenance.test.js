@@ -2162,7 +2162,12 @@ function syntheticCoverageDocument() {
   ].join('\n');
 }
 
-function syntheticRoadmapProjectionFixture() {
+/**
+ * @param {readonly string[]} [promotedFeatures]
+ */
+function syntheticRoadmapProjectionFixture(
+  promotedFeatures = Object.freeze([]),
+) {
   const code = 'H1';
   const issue = 120;
   const prefix = roadmapEvidencePrefix(code);
@@ -2251,7 +2256,7 @@ function syntheticRoadmapProjectionFixture() {
       {
         path: promotedPath,
         variants: 2,
-        features: [],
+        features: [...promotedFeatures],
         includeFeatures: [],
       },
     ],
@@ -2271,9 +2276,16 @@ function syntheticRoadmapProjectionFixture() {
       status: 'passed',
     }),
   ]);
-  const promotionRecords = baseAuditRecords.filter(
-    (record) => record.file === promotedPath,
-  );
+  const promotionRecords = baseAuditRecords
+    .filter((record) => record.file === promotedPath)
+    .map((record) =>
+      createTestRecord({
+        file: record.file,
+        variant: record.variant,
+        status: record.status,
+        features: [...promotedFeatures],
+      }),
+    );
   const headReportRecords = Object.freeze([
     ...baseReportRecords,
     ...promotionRecords,
@@ -9284,6 +9296,186 @@ export default [
         ),
         0,
       );
+      assertSame(
+        (fixture.headFiles.get('docs/test262-report.jsonl') ?? '').includes(
+          '"features":[]',
+        ),
+        false,
+      );
+
+      const featureFixture = syntheticRoadmapProjectionFixture(
+        Object.freeze(['Reflect', 'Symbol.toStringTag']),
+      );
+      const featureMarker =
+        /** @type {Parameters<typeof validateRoadmapProtectedOutputs>[2]['marker']} */ (
+          parseRoadmapAuthorityMarker(
+            roadmapConsumptionMarker({
+              code: featureFixture.code,
+              issue: featureFixture.authority.issue,
+              sourcePathSha256: featureFixture.authority.source.pathSha256,
+              sourceEntrySha256:
+                featureFixture.authority.source.entryLedgerSha256,
+              protectedProjectionSha256:
+                provenance.roadmapAggregateProjectionSha256(
+                  featureFixture.authority,
+                ),
+            }),
+          )
+        );
+      const featureChanges = featureFixture.changes.map((change) => ({
+        ...change,
+        sourcePath: null,
+      }));
+      assertSame(
+        await validateRoadmapAuthorityConsumption(
+          featureFixture.baseManifestValue,
+          featureFixture.headManifestValue,
+          featureMarker,
+          {
+            deps: rangeCheckDependencies({
+              changes: featureFixture.changes,
+              baseManifestText: featureFixture.baseManifestText,
+              headManifestText: featureFixture.headManifestText,
+              baseFiles: featureFixture.baseFiles,
+              headFiles: featureFixture.headFiles,
+            }),
+            base: RANGE_BASE_SHA,
+            head: RANGE_HEAD_SHA,
+            changes: featureChanges,
+          },
+        ),
+        0,
+      );
+      const featureReportText = featureFixture.headFiles.get(
+        'docs/test262-report.jsonl',
+      );
+      if (featureReportText === undefined) {
+        throw new Error('expected feature fixture report text');
+      }
+      assertSame(
+        featureReportText.includes(
+          '"features":["Reflect","Symbol.toStringTag"]',
+        ),
+        true,
+      );
+
+      const missingFeatureReport = featureReportText.replace(
+        '"features":["Reflect","Symbol.toStringTag"]',
+        '"features":["Reflect"]',
+      );
+      const reorderedFeatureReport = featureReportText.replace(
+        '"features":["Reflect","Symbol.toStringTag"]',
+        '"features":["Symbol.toStringTag","Reflect"]',
+      );
+      for (const scenario of [
+        {
+          headFiles: new Map([
+            ...featureFixture.headFiles,
+            ['docs/test262-report.jsonl', missingFeatureReport],
+          ]),
+          message:
+            'roadmap-reclassification:H1 protected output docs/test262-report.jsonl must match the canonical selected report',
+        },
+        {
+          headFiles: new Map([
+            ...featureFixture.headFiles,
+            ['docs/test262-report.jsonl', reorderedFeatureReport],
+          ]),
+          message:
+            'roadmap-reclassification:H1 protected output docs/test262-report.jsonl must match the canonical selected report',
+        },
+      ]) {
+        const error = await rejected(() =>
+          validateRoadmapAuthorityConsumption(
+            featureFixture.baseManifestValue,
+            featureFixture.headManifestValue,
+            featureMarker,
+            {
+              deps: rangeCheckDependencies({
+                changes: featureFixture.changes,
+                baseManifestText: featureFixture.baseManifestText,
+                headManifestText: featureFixture.headManifestText,
+                baseFiles: featureFixture.baseFiles,
+                headFiles: scenario.headFiles,
+              }),
+              base: RANGE_BASE_SHA,
+              head: RANGE_HEAD_SHA,
+              changes: featureChanges,
+            },
+          ),
+        );
+        assertSame(error.message, scenario.message);
+      }
+
+      const missingMetadataFixture = syntheticRoadmapProjectionFixture(
+        Object.freeze(['Reflect', 'Symbol.toStringTag']),
+      );
+      const originalArrayMap = Array.prototype.map;
+      let promotionMapCalls = 0;
+      /**
+       * @this {readonly { path: string, variants: number, features: readonly string[], includeFeatures: readonly string[] }[]}
+       * @type {typeof Array.prototype.map}
+       */
+      const patchedArrayMap = function map(callback, thisArg) {
+        if (
+          Object.isFrozen(this) &&
+          Object.isFrozen(this[0]) &&
+          this.length === 1 &&
+          this[0] !== undefined &&
+          this[0].path === 'test/language/promotion.js' &&
+          this[0].variants === 2 &&
+          Array.isArray(this[0].features) &&
+          this[0].features.length === 2 &&
+          Array.isArray(this[0].includeFeatures)
+        ) {
+          promotionMapCalls += 1;
+          // Let the first two traversals establish the promoted set.
+          if (promotionMapCalls < 3) {
+            return Reflect.apply(originalArrayMap, this, [callback, thisArg]);
+          }
+          const promotedEntries = this.slice();
+          promotedEntries[0] = {
+            ...promotedEntries[0],
+            path: 'test/language/promotion-metadata-missing.js',
+          };
+          return Reflect.apply(originalArrayMap, promotedEntries, [
+            callback,
+            thisArg,
+          ]);
+        }
+        return Reflect.apply(originalArrayMap, this, [callback, thisArg]);
+      };
+      Array.prototype.map = patchedArrayMap;
+      try {
+        const error = await rejected(() =>
+          validateRoadmapAuthorityConsumption(
+            missingMetadataFixture.baseManifestValue,
+            missingMetadataFixture.headManifestValue,
+            featureMarker,
+            {
+              deps: rangeCheckDependencies({
+                changes: missingMetadataFixture.changes,
+                baseManifestText: missingMetadataFixture.baseManifestText,
+                headManifestText: missingMetadataFixture.headManifestText,
+                baseFiles: missingMetadataFixture.baseFiles,
+                headFiles: missingMetadataFixture.headFiles,
+              }),
+              base: RANGE_BASE_SHA,
+              head: RANGE_HEAD_SHA,
+              changes: missingMetadataFixture.changes.map((change) => ({
+                ...change,
+                sourcePath: null,
+              })),
+            },
+          ),
+        );
+        assertSame(
+          error.message,
+          'roadmap-reclassification:H1 protected output docs/test262-report.jsonl promotion metadata is missing test/language/promotion.js',
+        );
+      } finally {
+        Array.prototype.map = originalArrayMap;
+      }
 
       for (const scenario of [
         {

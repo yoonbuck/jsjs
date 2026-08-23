@@ -3190,6 +3190,9 @@ async function validateReportProjection(
       AUDIT_EVIDENCE_FILE,
       'HEAD',
     );
+    const promotionByPath = new Map(
+      promotion.entries.map((entry) => [entry.path, entry]),
+    );
     promotionRecords = parseRoadmapAuditEvidence(
       auditEvidenceText,
       AUDIT_EVIDENCE_FILE,
@@ -3201,10 +3204,17 @@ async function validateReportProjection(
             `${profile} protected output ${output.path} requires passing audit evidence for promoted path ${record.file}`,
           );
         }
+        const promotedEntry = promotionByPath.get(record.file);
+        if (promotedEntry === undefined) {
+          throw new Es2015ProvenanceCheckError(
+            `${profile} protected output ${output.path} promotion metadata is missing ${record.file}`,
+          );
+        }
         return createTestRecord({
           file: record.file,
           variant: record.variant,
           status: record.status,
+          features: promotedEntry.features,
         });
       });
   }
