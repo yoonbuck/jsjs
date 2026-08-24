@@ -509,6 +509,85 @@ typecheck, scoped lint/format, `npm run ci:check`, exact range checks, and
 consumed only through the normal `roadmap-reclassification:M1` marker documented
 below.
 
+### One-use P1C authority repair (#116)
+
+P1C's pending authority is corrected by one exact HEAD-checker range rooted at
+`edccfb8822339dab53c47bbb8c4ae5cc2db93b1b`. The repair leaves P1C
+`pending`, preserves its 81-root/161-variant source and all six evidence
+records, and changes no evidence file, protected-output byte, runtime file,
+workflow, pipeline, policy, feature manifest, selection file, or decision
+fragment.
+
+An ordinary unprivileged `pull_request` body must contain this exact LF-only
+marker:
+
+```text
+<!-- es2015-p1c-authority-repair
+parent:70
+code:P1C
+issue:116
+base:edccfb8822339dab53c47bbb8c4ae5cc2db93b1b
+base-manifest-sha256:55b95d0fb5071b411dd3d82051496505e154f043adee62c2bd2e4aae643c2227
+base-record-sha256:3281bd0001ac48ee6f31d21d12a8faade3652cd194360fcf21c3ffc1b9a3a193
+head-manifest-sha256:5b94b819025e79ebadb763a7d5eb0ce67174f15effcee61745d305e2a32034c4
+head-record-sha256:95036226ee50e365b03c823bab751c6e1d646af0d5c6352a199cd442e2aa9278
+-->
+```
+
+Including the final LF, those marker bytes have SHA-256
+`780c1ce94d24ef9e249c209fdd28a56ab9ec885ec4d75a92ba7c0ecd21396177`.
+Only the checked-out HEAD checker scans this marker, and only when
+`GITHUB_EVENT_NAME` is exactly `pull_request`. It is not scanned on
+`pull_request_target`; local
+`--profile=p1c-authority-repair --marker=...` activation is rejected.
+
+The validator independently pins all repair identities:
+
+```text
+BASE commit    edccfb8822339dab53c47bbb8c4ae5cc2db93b1b
+BASE manifest  55b95d0fb5071b411dd3d82051496505e154f043adee62c2bd2e4aae643c2227
+BASE checker   c806b9987a647b790ecfa736f4b6cc960e86c78755c3a824885313bae4b37e96
+BASE P1C       3281bd0001ac48ee6f31d21d12a8faade3652cd194360fcf21c3ffc1b9a3a193
+HEAD manifest  5b94b819025e79ebadb763a7d5eb0ce67174f15effcee61745d305e2a32034c4
+HEAD P1C       95036226ee50e365b03c823bab751c6e1d646af0d5c6352a199cd442e2aa9278
+```
+
+The complete BASE-to-HEAD range is exactly:
+
+```text
+M tools/test262/es2015-provenance-check.js
+M tools/test262/es2015-provenance.json
+M test/node/es2015-provenance.test.js
+M docs/testing.md
+A docs/superpowers/specs/2026-08-24-p1c-authority-repair-design.md
+A docs/superpowers/plans/2026-08-24-p1c-authority-repair.md
+```
+
+Missing, extra, duplicate, renamed, copied, deleted, aliased, traversed,
+non-regular, mode-drifted, or wrong-status paths fail. A marker and canonical
+HEAD that agree on alternate manifest or P1C-record hashes still fail the
+literal corrected identities. Defense in depth also derives an immutable set
+from the BASE manifest and requires byte and regular-file-mode identity for
+the workflow, pipeline, policy, feature manifest, every decision fragment,
+and every evidence/protected-output path of every BASE authority. Authority
+paths absent in BASE, including all six future P1C evidence files, must remain
+absent in HEAD.
+
+The unchanged exact BASE checker is expected to reject this repair only with:
+
+```text
+A provenance-owned PR range requires one authoritative provenance marker
+```
+
+Only that old-trust-root failure may receive an explicit administrator-reviewed
+merge exception; no other test, CI, CodeQL, warning, extraction, or alert
+failure is waivable. After the repair merge, verification on main must reproduce
+the HEAD manifest and P1C hashes above plus protected aggregate
+`6e92772f4eb42ecaef7f673f243ecdd689b73bc1e9a7a3a545150c2f8630a813`.
+PR #118 remains abandoned and must not be reopened, rebased, force-updated, or
+reused. Semantic P1C delivery starts from the verified repair merge on a fresh
+branch and uses a fresh pull request.
+
 ### Deterministic ES2015 taxonomy and exact promotion
 
 The taxonomy is a timestamp-free, code-unit-sorted classification of the
