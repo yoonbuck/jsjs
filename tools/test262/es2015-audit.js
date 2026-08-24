@@ -1423,13 +1423,9 @@ async function synchronizePromotedReport(options) {
   const standardPromotionPaths = new Set(
     standardPromotions.flatMap((candidate) => promotionPaths(candidate)),
   );
-  const m1PromotionPaths = new Set(
+  const namedPromotionPaths = new Set(
     standardPromotions
-      .filter(
-        (candidate) =>
-          'groupName' in candidate &&
-          candidate.groupName === M1_PROMOTION_GROUP,
-      )
+      .filter((candidate) => 'groupName' in candidate)
       .flatMap((candidate) => promotionPaths(candidate)),
   );
   const h0PromotionPaths = new Set(
@@ -1487,8 +1483,8 @@ async function synchronizePromotedReport(options) {
         `${ES2015_AUDIT_EVIDENCE_FILE} names a foreign promotion root ${path}`,
       );
     }
-    // Legacy broad records preserve source order; M1 report bytes use the
-    // authority-owned canonical feature order.
+    // Legacy broad records preserve source order; named promotion report bytes
+    // use the authority-owned canonical feature order.
     const metadata = parseTest262Metadata(await deps.readRoot(path));
     if (!sameStrings(sortStrings(metadata.features), entry.features)) {
       throw new Es2015AuditError(
@@ -1497,7 +1493,7 @@ async function synchronizePromotedReport(options) {
     }
     rawPromotionFeatures.set(
       path,
-      m1PromotionPaths.has(path) ? entry.features : metadata.features,
+      namedPromotionPaths.has(path) ? entry.features : metadata.features,
     );
   }
   const promotedRecords = promotionEvidence.map((record) => {
