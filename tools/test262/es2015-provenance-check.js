@@ -189,6 +189,33 @@ const M1_AUTHORITY_REPAIR_SELECTION_OUTPUT = Object.freeze({
     '78ac694beb258be0b67c7788137c736b0b30cf7457e3a903d364d38c038b48df',
   projectionSha256: null,
 });
+const P1C_AUTHORITY_REPAIR_AUDIT_OUTPUT = Object.freeze({
+  path: AUDIT_EVIDENCE_FILE,
+  operation: 'replace-exact',
+  baseSha256:
+    'eabaeb8245a6988443d91b21219c9e7919ec22639d6e8515a8dadbe5ddfc217f',
+  headSha256:
+    '50f9a54346d0e9e5168a6ac6b0b8de6d709e2c5b808d6c8b036e5113612e638c',
+  projectionSha256: null,
+});
+const P1C_AUTHORITY_REPAIR_TAXONOMY_OUTPUT = Object.freeze({
+  path: TAXONOMY_FILE,
+  operation: 'replace-exact',
+  baseSha256:
+    'fba700539b05edd67b6cf67e4c0a1361398a2d0f04212bc7080a83f44abf577a',
+  headSha256:
+    'fdf3c8bf229f6c841209e4c4a2196001d45cf0a1c270f334cf06e5f54a00f3c7',
+  projectionSha256: null,
+});
+const P1C_AUTHORITY_REPAIR_SUBSET_OUTPUT = Object.freeze({
+  path: 'tools/test262/upstream-subset.json',
+  operation: 'replace-exact',
+  baseSha256:
+    '9f768aa8fb0c473e98fe2156d290c4207cea797302cccad6f9b1b922a36b37c0',
+  headSha256:
+    '5a5b83b3c28991c5f2ac141ed949a9698966cce85587d671a4417228d5e08b14',
+  projectionSha256: null,
+});
 const M1_AUTHORITY_REPAIR_CHANGES = Object.freeze([
   Object.freeze({
     status: 'M',
@@ -1407,6 +1434,182 @@ function assertM1AuthorityRepairManifestDelta(baseManifest, headManifest) {
     );
   }
   return headM1;
+}
+
+/**
+ * @param {ReturnType<typeof parseEs2015ProvenanceManifest>} baseManifest
+ * @param {ReturnType<typeof parseEs2015ProvenanceManifest>} headManifest
+ */
+export function assertP1CAuthorityRepairManifestDelta(
+  baseManifest,
+  headManifest,
+) {
+  const {
+    roadmapAuthorities: baseAuthorities = [],
+    ...baseManifestWithoutAuthorities
+  } = baseManifest;
+  const {
+    roadmapAuthorities: headAuthorities = [],
+    ...headManifestWithoutAuthorities
+  } = headManifest;
+  if (
+    json(baseManifestWithoutAuthorities) !==
+    json(headManifestWithoutAuthorities)
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      'P1C authority repair must preserve all non-authority manifest data',
+    );
+  }
+  if (baseAuthorities.length !== headAuthorities.length) {
+    throw new Es2015ProvenanceCheckError(
+      'P1C authority repair must preserve roadmap authority count and order',
+    );
+  }
+  const baseP1CIndex = baseAuthorities.findIndex(
+    (/** @type {{ code: string }} */ authority) => authority.code === 'P1C',
+  );
+  const headP1CIndex = headAuthorities.findIndex(
+    (/** @type {{ code: string }} */ authority) => authority.code === 'P1C',
+  );
+  if (
+    baseP1CIndex < 0 ||
+    (headP1CIndex >= 0 && headP1CIndex !== baseP1CIndex)
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      'P1C authority repair must preserve roadmap authority count and order',
+    );
+  }
+  for (let index = 0; index < baseAuthorities.length; index += 1) {
+    if (index === baseP1CIndex) continue;
+    if (baseAuthorities[index].code !== headAuthorities[index].code) {
+      throw new Es2015ProvenanceCheckError(
+        'P1C authority repair must preserve roadmap authority count and order',
+      );
+    }
+  }
+  const baseP1C = baseAuthorities[baseP1CIndex];
+  const headP1C = headAuthorities[baseP1CIndex];
+  if (baseP1C === undefined || headP1C === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      'P1C authority repair must preserve roadmap authority count and order',
+    );
+  }
+  for (let index = 0; index < baseAuthorities.length; index += 1) {
+    const baseAuthority = baseAuthorities[index];
+    const headAuthority = headAuthorities[index];
+    if (baseAuthority.code === 'P1C') continue;
+    if (
+      canonicalRoadmapAuthoritySha256(baseAuthority) !==
+      canonicalRoadmapAuthoritySha256(headAuthority)
+    ) {
+      throw new Es2015ProvenanceCheckError(
+        `${baseAuthority.code} roadmap authority must remain canonical during P1C authority repair`,
+      );
+    }
+  }
+  if (baseP1C.state !== 'pending' || headP1C.state !== 'pending') {
+    throw new Es2015ProvenanceCheckError(
+      'P1C authority repair must keep P1C pending',
+    );
+  }
+  for (const field of ['code', 'issue', 'parentIssue']) {
+    if (headP1C[field] !== baseP1C[field]) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair must preserve P1C ${field}`,
+      );
+    }
+  }
+  for (const field of ['source', 'reconciliation', 'destinations']) {
+    if (json(headP1C[field]) !== json(baseP1C[field])) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair must preserve P1C ${field}`,
+      );
+    }
+  }
+  if (
+    headP1C.evidence.length !== baseP1C.evidence.length ||
+    json(
+      headP1C.evidence.map(
+        (/** @type {{ path: string }} */ entry) => entry.path,
+      ),
+    ) !==
+      json(
+        baseP1C.evidence.map(
+          (/** @type {{ path: string }} */ entry) => entry.path,
+        ),
+      )
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      'P1C authority repair must preserve P1C evidence paths and order',
+    );
+  }
+  for (const baseEvidence of baseP1C.evidence) {
+    const headEvidence = headP1C.evidence.find(
+      (/** @type {{ path: string }} */ entry) =>
+        entry.path === baseEvidence.path,
+    );
+    if (json(headEvidence) === json(baseEvidence)) continue;
+    throw new Es2015ProvenanceCheckError(
+      `P1C authority repair must preserve P1C evidence ${baseEvidence.path}`,
+    );
+  }
+
+  const expectedOutputs = baseP1C.protectedOutputs.map(
+    (/** @type {Record<string, any>} */ output) => {
+      if (output.path === P1C_AUTHORITY_REPAIR_AUDIT_OUTPUT.path) {
+        return P1C_AUTHORITY_REPAIR_AUDIT_OUTPUT;
+      }
+      if (output.path === P1C_AUTHORITY_REPAIR_TAXONOMY_OUTPUT.path) {
+        return P1C_AUTHORITY_REPAIR_TAXONOMY_OUTPUT;
+      }
+      if (output.path === P1C_AUTHORITY_REPAIR_SUBSET_OUTPUT.path) {
+        return P1C_AUTHORITY_REPAIR_SUBSET_OUTPUT;
+      }
+      return output;
+    },
+  );
+  if (
+    json(
+      headP1C.protectedOutputs.map(
+        (/** @type {{ path: string }} */ output) => output.path,
+      ),
+    ) !==
+    json(
+      expectedOutputs.map(
+        (/** @type {{ path: string }} */ output) => output.path,
+      ),
+    )
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      'P1C authority repair requires the exact P1C protected output paths and order',
+    );
+  }
+  for (const expectedOutput of expectedOutputs) {
+    const headOutput = headP1C.protectedOutputs.find(
+      (/** @type {{ path: string }} */ output) =>
+        output.path === expectedOutput.path,
+    );
+    if (json(headOutput) === json(expectedOutput)) continue;
+    if (expectedOutput.path === P1C_AUTHORITY_REPAIR_AUDIT_OUTPUT.path) {
+      throw new Es2015ProvenanceCheckError(
+        'P1C authority repair requires the exact corrected P1C audit replacement output',
+      );
+    }
+    if (expectedOutput.path === P1C_AUTHORITY_REPAIR_TAXONOMY_OUTPUT.path) {
+      throw new Es2015ProvenanceCheckError(
+        'P1C authority repair requires the exact corrected P1C taxonomy replacement output',
+      );
+    }
+    if (expectedOutput.path === P1C_AUTHORITY_REPAIR_SUBSET_OUTPUT.path) {
+      throw new Es2015ProvenanceCheckError(
+        'P1C authority repair requires the exact corrected P1C subset replacement output',
+      );
+    }
+    throw new Es2015ProvenanceCheckError(
+      `P1C authority repair must preserve P1C protected output ${expectedOutput.path}`,
+    );
+  }
+  return headP1C;
 }
 
 /**
