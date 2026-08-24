@@ -15174,6 +15174,132 @@
           "issue": 77
         }
       ]
+    },
+    {
+      "code": "P1C",
+      "issue": 116,
+      "parentIssue": 70,
+      "state": "pending",
+      "source": {
+        "baseTaxonomySha256": "fba700539b05edd67b6cf67e4c0a1361398a2d0f04212bc7080a83f44abf577a",
+        "rootCount": 81,
+        "variantCount": 161,
+        "pathSha256": "e40f2a9c1dcd2aeb2cb56c4e3147a49d8d15275724abe002589dbbac05cb65d5",
+        "entryLedgerSha256": null
+      },
+      "reconciliation": null,
+      "evidence": [
+        {
+          "path": "tools/test262/es2015-p1c-baseline.json",
+          "sha256": "86e3ca7c89716f4624bf029816bfe41befbc0a86c0d67ffe7066d7d27e8ed9e4"
+        },
+        {
+          "path": "tools/test262/es2015-p1c-disposition.json",
+          "sha256": "662616db1c184b2475f091ef5c380760afacb298abae8cf6fe7fac0ae528d3bc"
+        },
+        {
+          "path": "tools/test262/es2015-p1c-owner-deltas.json",
+          "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+        },
+        {
+          "path": "tools/test262/es2015-p1c-owner-map.json",
+          "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+        },
+        {
+          "path": "tools/test262/es2015-p1c-paths.json",
+          "sha256": "d7cd9512d5eb520b1ac9cbbbcc9414381d5de2b1c7de35fa891b5a100352d124"
+        },
+        {
+          "path": "tools/test262/es2015-p1c-promotion.json",
+          "sha256": "5c201d87dc4c0b7a18d3dce7e1c69933356f628008a6ef837eb5353641610501"
+        }
+      ],
+      "protectedOutputs": [
+        {
+          "path": "docs/conformance.md",
+          "operation": "project",
+          "baseSha256": "61ed7a18ff9d77c9b0b3e5d4c598ce30e998d633be88bb1bc101c650aee65169",
+          "headSha256": null,
+          "projectionSha256": "798f8dae856b6a774a787606684e2dd3b2109a983f09783323084b8978425ba5"
+        },
+        {
+          "path": "docs/test262-report.jsonl",
+          "operation": "project",
+          "baseSha256": "ead91d3f6c0f23f8cfbe839bef3e371539e5f8fa590b9b351570714ce740e5c8",
+          "headSha256": null,
+          "projectionSha256": "1dedeb49f3849b8fa89f03b720830d0d51f3a6b9cba6f7060d5bdae490c6fd9a"
+        },
+        {
+          "path": "tools/test262/es2015-audit-evidence.json",
+          "operation": "replace-exact",
+          "baseSha256": "eabaeb8245a6988443d91b21219c9e7919ec22639d6e8515a8dadbe5ddfc217f",
+          "headSha256": "06817df31fa640d058ce19ac6b01e589e487313a7ec6572f3d888d5412ffd197",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-p1c-baseline.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "86e3ca7c89716f4624bf029816bfe41befbc0a86c0d67ffe7066d7d27e8ed9e4",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-p1c-disposition.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "662616db1c184b2475f091ef5c380760afacb298abae8cf6fe7fac0ae528d3bc",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-p1c-owner-deltas.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-p1c-owner-map.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-p1c-paths.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "d7cd9512d5eb520b1ac9cbbbcc9414381d5de2b1c7de35fa891b5a100352d124",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-p1c-promotion.json",
+          "operation": "add-exact",
+          "baseSha256": null,
+          "headSha256": "5c201d87dc4c0b7a18d3dce7e1c69933356f628008a6ef837eb5353641610501",
+          "projectionSha256": null
+        },
+        {
+          "path": "tools/test262/es2015-taxonomy.json",
+          "operation": "project",
+          "baseSha256": "fba700539b05edd67b6cf67e4c0a1361398a2d0f04212bc7080a83f44abf577a",
+          "headSha256": null,
+          "projectionSha256": "1898cd103a1039cd10d052ec1d2d23fcfde6871a3dba8af249fb24fa6f502f70"
+        },
+        {
+          "path": "tools/test262/upstream-subset.json",
+          "operation": "project",
+          "baseSha256": "9f768aa8fb0c473e98fe2156d290c4207cea797302cccad6f9b1b922a36b37c0",
+          "headSha256": null,
+          "projectionSha256": "e247565d30ce17195acbc26f8e18b4344b6af72ff4be507641f647b24162c762"
+        }
+      ],
+      "destinations": [
+        {
+          "status": "selected-passing",
+          "blocker": null,
+          "issue": 116
+        }
+      ]
     }
   ]
 }
