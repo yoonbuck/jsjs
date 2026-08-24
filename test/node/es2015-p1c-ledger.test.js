@@ -2,6 +2,19 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { assertSame, assertThrows } from '../harness/assert.js';
 
+/**
+ * @typedef {{
+ *   path: string,
+ *   variants: number,
+ *   partition: string,
+ *   status: string,
+ *   blocker: string | null,
+ * }} P1cTaxonomyClassification
+ * @typedef {{
+ *   classifications: readonly P1cTaxonomyClassification[],
+ * }} P1cTaxonomy
+ */
+
 const LEDGER_FILE = 'tools/test262/es2015-p1c-paths.txt';
 const EXPECTED_SHA256 =
   'e40f2a9c1dcd2aeb2cb56c4e3147a49d8d15275724abe002589dbbac05cb65d5';
@@ -18,9 +31,9 @@ export default [
         ? ledgerText.slice(0, -1).split('\n')
         : ledgerText.split('\n');
       const taxonomy = JSON.parse(taxonomyText);
-      validateP1cTaxonomyClassifications(taxonomy);
+      const validatedTaxonomy = validateP1cTaxonomyClassifications(taxonomy);
       const byPath = new Map(
-        taxonomy.classifications.map((entry) => [entry.path, entry]),
+        validatedTaxonomy.classifications.map((entry) => [entry.path, entry]),
       );
 
       assertSame(paths.length, 81);
@@ -34,14 +47,17 @@ export default [
       let variants = 0;
       for (const path of paths) {
         const entry = byPath.get(path);
-        assertSame(entry?.partition, 'core', path);
+        if (entry === undefined) {
+          throw new Error(`P1C taxonomy missing classification for ${path}`);
+        }
+        assertSame(entry.partition, 'core', path);
         assertSame(
-          entry?.status,
+          entry.status,
           'blocked:early-errors-and-declaration-instantiation',
           path,
         );
         assertSame(
-          entry?.blocker,
+          entry.blocker,
           'early-errors-and-declaration-instantiation',
           path,
         );
@@ -122,7 +138,7 @@ export default [
 
 /**
  * @param {unknown} taxonomy
- * @returns {void}
+ * @returns {P1cTaxonomy}
  */
 function validateP1cTaxonomyClassifications(taxonomy) {
   if (
@@ -132,13 +148,19 @@ function validateP1cTaxonomyClassifications(taxonomy) {
   ) {
     throw new Error('P1C taxonomy must be an object');
   }
-  if (!Array.isArray(taxonomy.classifications)) {
+  const taxonomyRecord =
+    /** @type {{ classifications?: readonly unknown[] }} */ (taxonomy);
+  if (!Array.isArray(taxonomyRecord.classifications)) {
     throw new Error('P1C taxonomy.classifications must be an array');
   }
 
   const paths = new Set();
-  for (let index = 0; index < taxonomy.classifications.length; index += 1) {
-    const entry = taxonomy.classifications[index];
+  for (
+    let index = 0;
+    index < taxonomyRecord.classifications.length;
+    index += 1
+  ) {
+    const entry = taxonomyRecord.classifications[index];
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
       throw new Error(
         `P1C taxonomy.classifications[${index}] must be an object`,
@@ -177,4 +199,14 @@ function validateP1cTaxonomyClassifications(taxonomy) {
 
     paths.add(entry.path);
   }
+
+  return {
+    classifications: taxonomyRecord.classifications.map((entry) => ({
+      path: entry.path,
+      variants: entry.variants,
+      partition: entry.partition,
+      status: entry.status,
+      blocker: entry.blocker,
+    })),
+  };
 }
