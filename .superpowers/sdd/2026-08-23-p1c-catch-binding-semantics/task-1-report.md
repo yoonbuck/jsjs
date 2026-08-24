@@ -10,7 +10,7 @@ Done.
 
 ## Head
 
-`a1fa43d6dd48b7c2601b481af731ef4b91f4c433`
+`7e5d628caa22b021a00c0914dda22e05aabca423`
 
 ## Files
 
@@ -51,9 +51,47 @@ git diff --check
 - `task1-green`: Node suite passed after the ledger was added.
 - `task1-verify`: final Node, ESLint, Prettier, SHA, and diff checks passed.
 
+## Fix Round 1
+
+- Tightened `test/node/es2015-p1c-ledger.test.js` with an explicit taxonomy
+  gate before `Map` construction.
+- Added negative fixture tests for non-array classifications, duplicate paths,
+  and non-integer variants.
+
+### RED
+
+```sh
+TZ=UTC node test/run-node.js test/node/es2015-p1c-ledger.test.js
+```
+
+After adding the new tests, this failed with:
+
+```txt
+ReferenceError: validateP1cTaxonomyClassifications is not defined
+```
+
+### GREEN
+
+```sh
+TZ=UTC node test/run-node.js test/node/es2015-p1c-ledger.test.js
+./node_modules/.bin/eslint test/node/es2015-p1c-ledger.test.js test/run-node.js
+./node_modules/.bin/prettier --check test/node/es2015-p1c-ledger.test.js test/run-node.js
+git diff --check
+```
+
+All four focused tests/checks passed after implementing the helper and
+formatting the file.
+
+### Logs
+
+- `task1-red3`: new validation tests failed for the expected missing-helper
+  reason.
+- `task1-verify4`: focused P1C ledger test, ESLint, Prettier, and diff checks
+  all passed.
+
 ## Commit
 
-`a1fa43d6dd48b7c2601b481af731ef4b91f4c433` — `test262: freeze exact P1C source ledger`
+`7e5d628caa22b021a00c0914dda22e05aabca423` — `test262: harden P1C ledger validation`
 
 ## Self-review
 
