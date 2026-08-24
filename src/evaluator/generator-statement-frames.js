@@ -27,6 +27,7 @@ import {
   blockDeclarationInstantiation,
   evaluateNamedExpression,
 } from './declarations.js';
+import { createCatchClauseContext } from './catch-binding.js';
 import { evaluateExpressionValue } from './expressions.js';
 import {
   createGeneratorExpressionFrame,
@@ -34,10 +35,7 @@ import {
   createGeneratorPatternFrame,
   createNamedGeneratorExpressionFrame,
 } from './generator-expression-frames.js';
-import {
-  initializeBindingPattern,
-  initializePatternIdentifier,
-} from './patterns.js';
+import { initializePatternIdentifier } from './patterns.js';
 import {
   boundNames,
   isConstantDeclaration,
@@ -1933,25 +1931,22 @@ function tryPhaseContext(frame) {
  * @returns {Completion | null}
  */
 function prepareCatchClause(execution, frame, thrownValue) {
-  const catchEnv = newDeclarativeEnvironment(frame.context.env);
-  catchEnv.isCatchClauseEnvironment = true;
-  const catchContext = { ...frame.context, env: catchEnv };
-  const param = frame.node.handler.param;
+  const initialized = captureGeneratorOperation(execution.realm, () =>
+    createCatchClauseContext(
+      frame.node.handler.param,
+      thrownValue,
+      frame.context,
+    ),
+  );
 
-  if (param !== null) {
-    const initialized = captureGeneratorOperation(execution.realm, () => {
-      for (const name of boundNames(param)) {
-        catchEnv.createMutableBinding(name, false);
-      }
-      initializeBindingPattern(param, thrownValue, catchEnv, catchContext);
-    });
-
-    if (initialized.type === 'completion') {
-      return initialized.completion;
-    }
+  if (initialized.type === 'completion') {
+    return initialized.completion;
+  }
+  if (initialized.type !== 'value') {
+    throw new TypeError('Catch initialization must produce a context value');
   }
 
-  frame.catchContext = catchContext;
+  frame.catchContext = /** @type {EvaluationContext} */ (initialized.value);
   return null;
 }
 

@@ -30,6 +30,7 @@ import {
   evaluateVariableDeclaration,
 } from './declarations.js';
 import { evaluateClassDefinition } from './classes.js';
+import { createCatchClauseContext } from './catch-binding.js';
 import {
   boundNames,
   isConstantDeclaration,
@@ -1154,21 +1155,29 @@ function evaluateTryStatement(node, context) {
   // Run the catch clause when there is one and the try block threw.
   if (node.handler !== null) {
     if (blockCompletion.type === 'throw') {
-      const catchEnv = newDeclarativeEnvironment(context.env);
-      // ES2015 Annex B.3.5: mark this record so a non-strict direct `eval` in
-      // the catch body may hoist a `var` of the catch parameter's name without
-      // a redeclaration SyntaxError (see `hasEvalChainLexicalBinding`).
-      catchEnv.isCatchClauseEnvironment = true;
-      const paramName = node.handler.param.name;
-      catchEnv.createMutableBinding(paramName);
-      catchEnv.initializeBinding(paramName, blockCompletion.value);
-
-      const catchContext = { ...context, env: catchEnv };
-
-      blockCompletion = runToCompletion(
-        () => evaluateBlock(node.handler.body, catchContext),
+      const initialized = runToCompletion(
+        () =>
+          createNormalCompletion(
+            createCatchClauseContext(
+              node.handler.param,
+              blockCompletion.value,
+              context,
+            ),
+          ),
         context.realm,
       );
+
+      if (initialized.type === 'throw') {
+        blockCompletion = initialized;
+      } else {
+        const catchContext = /** @type {EvaluationContext} */ (
+          initialized.value
+        );
+        blockCompletion = runToCompletion(
+          () => evaluateBlock(node.handler.body, catchContext),
+          context.realm,
+        );
+      }
     }
   }
 
