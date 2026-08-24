@@ -7,7 +7,9 @@ import { assertThrows } from '../harness/assert.js';
 import { parseTest262Metadata } from '../../tools/test262/metadata.js';
 import {
   ES5_SELECTION_VERSION,
+  matchExclusion,
   parseEs5Selection,
+  serializeUpstreamSubset,
 } from '../../tools/test262/es5-selection.js';
 import {
   ES2015_H0_PROMOTION_GROUP,
@@ -44,7 +46,16 @@ import {
   parseUpstreamSubset,
   upstreamSubsetPaths,
 } from '../../tools/test262/upstream.js';
-import { createPromotionReportFeaturesForPath } from '../../tools/test262/promotion-report-features.js';
+import {
+  ES2015_M1_PROMOTION_FILE,
+  ES2015_P1C_PROMOTION_FILE,
+  ES2015_ROADMAP_PROMOTION_FILES,
+  readOptionalRoadmapFile,
+} from '../../tools/test262/es2015-roadmap-promotions.js';
+import {
+  createPromotionReportFeaturesForPath,
+  createPromotionReportFeaturesForPromotions,
+} from '../../tools/test262/promotion-report-features.js';
 
 const { structuredClone } = globalThis;
 const EXCLUDED_PATH = 'test/staging/not-read.js';
@@ -91,6 +102,7 @@ const PRE_PROMOTION_TAXONOMY_SHA256 =
   'ce05cbdf15ee3262651520f81ca7e904e021cd4dfcbb29d787b69b4f8f897e31';
 const PRE_PROMOTION_GROUPS_SHA256 =
   '064be556b3e98debaca2287097c2ab431283906df57a82dd5c6aba01227440f8';
+const P1C_PROMOTION_GROUP = 'es2015/p1c-catch-binding';
 const M1_TRACKED_SOURCE_FEATURE_ORDER = Object.freeze({
   'test/built-ins/Reflect/Symbol.toStringTag.js': Object.freeze([
     'Symbol.toStringTag',
@@ -604,7 +616,7 @@ function promotionFixture(overrides = {}) {
 /**
  * @param {Partial<{
  *   groupName: string,
- *   entries: object[],
+ *   entries: readonly object[],
  *   rootCount: number,
  *   variantCount: number,
  *   ledgerSha256: string,
@@ -625,6 +637,55 @@ function namedPromotionFixture(overrides = {}) {
     ...overrides,
   };
 }
+
+function p1cPromotionEntries() {
+  return Array.from({ length: 81 }, (_, index) => ({
+    path: `test/language/statements/try/p1c-${String(index).padStart(3, '0')}.js`,
+    variants: index === 80 ? 1 : 2,
+    features: index === 0 ? ['destructuring-binding'] : [],
+    includeFeatures: index === 0 ? ['p1c-include-feature'] : [],
+  }));
+}
+
+/**
+ * @param {readonly { path: string }[]} entries
+ * @returns {string}
+ */
+function promotionLedgerSha256(entries) {
+  return sha256(`${entries.map((entry) => entry.path).join('\n')}\n`);
+}
+
+/**
+ * @param {Partial<{
+ *   groupName: string,
+ *   entries: readonly {
+ *     path: string,
+ *     variants: number,
+ *     features: readonly string[],
+ *     includeFeatures: readonly string[],
+ *   }[],
+ *   rootCount: number,
+ *   variantCount: number,
+ *   ledgerSha256: string,
+ * }>} [overrides]
+ */
+function p1cPromotionFixture(overrides = {}) {
+  const entries = overrides.entries ?? p1cPromotionEntries();
+  return namedPromotionFixture({
+    groupName: P1C_PROMOTION_GROUP,
+    entries,
+    rootCount: overrides.rootCount ?? entries.length,
+    variantCount:
+      overrides.variantCount ??
+      entries.reduce((total, entry) => total + entry.variants, 0),
+    ledgerSha256: overrides.ledgerSha256 ?? promotionLedgerSha256(entries),
+    ...overrides,
+  });
+}
+
+const P1C_PROMOTION_TEXT = json(p1cPromotionFixture());
+const P1C_PROMOTION = parseEs2015Promotion(P1C_PROMOTION_TEXT);
+const P1C_AUTHORIZED_PATH = P1C_PROMOTION.entries[0].path;
 
 /**
  * @param {Partial<{
@@ -1351,6 +1412,253 @@ export default [
     },
   },
   {
+    name: 'roadmap promotions preserve current selection bytes when optional P1C is absent and add one unique exact group when present',
+    run: async () => {
+      assertSame(
+        ES2015_P1C_PROMOTION_FILE,
+        'tools/test262/es2015-p1c-promotion.json',
+      );
+      assertSame(
+        JSON.stringify(ES2015_ROADMAP_PROMOTION_FILES),
+        JSON.stringify([ES2015_M1_PROMOTION_FILE, ES2015_P1C_PROMOTION_FILE]),
+      );
+      assertSame(
+        /** @type {any} */ (P1C_PROMOTION).groupName,
+        P1C_PROMOTION_GROUP,
+      );
+      assertSame(P1C_PROMOTION.version, 2);
+      assertSame(P1C_PROMOTION.rootCount, 81);
+      assertSame(P1C_PROMOTION.variantCount, 161);
+
+      const [promotionText, h0PromotionText, m1PromotionText, subsetText] =
+        await Promise.all([
+          readFile(
+            new URL('tools/test262/es2015-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/es2015-h0-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/es2015-m1-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/upstream-subset.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+        ]);
+      const t0 = parseEs2015Promotion(promotionText);
+      const h0 = parseEs2015Promotion(h0PromotionText);
+      const m1 = parseEs2015Promotion(m1PromotionText);
+      const subset = parseUpstreamSubset(subsetText);
+      const generated = parseUpstreamSubset(
+        json({
+          version: subset.version,
+          repository: subset.repository,
+          revision: subset.revision,
+          groups: subset.groups.filter(
+            (group) =>
+              group.name !== ES2015_PROMOTION_GROUP &&
+              group.name !== ES2015_H0_PROMOTION_GROUP &&
+              group.name !== 'es2015/m1-reflect',
+          ),
+        }),
+      );
+      const withoutP1C = mergePromotionSubsets(generated, [t0, h0, m1]);
+      const withP1C = mergePromotionSubsets(generated, [
+        t0,
+        h0,
+        m1,
+        P1C_PROMOTION,
+      ]);
+
+      assertSame(serializeUpstreamSubset(withoutP1C), subsetText);
+      assertSame(withP1C.groups.length, subset.groups.length + 1);
+      assertSame(
+        JSON.stringify(
+          withP1C.groups
+            .filter((group) => group.name === P1C_PROMOTION_GROUP)
+            .map((group) => group.paths),
+        ),
+        JSON.stringify([promotionPaths(P1C_PROMOTION)]),
+      );
+      assertSame(
+        JSON.stringify(
+          withP1C.groups.filter((group) => group.name !== P1C_PROMOTION_GROUP),
+        ),
+        JSON.stringify(subset.groups),
+      );
+    },
+  },
+  {
+    name: 'roadmap promotions reject P1C overlap and rethrow unsupported optional reads',
+    run: async () => {
+      const [promotionText, h0PromotionText, m1PromotionText, subsetText] =
+        await Promise.all([
+          readFile(
+            new URL('tools/test262/es2015-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/es2015-h0-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/es2015-m1-promotion.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+          readFile(
+            new URL('tools/test262/upstream-subset.json', REPOSITORY_ROOT),
+            'utf8',
+          ),
+        ]);
+      const t0 = parseEs2015Promotion(promotionText);
+      const h0 = parseEs2015Promotion(h0PromotionText);
+      const m1 = parseEs2015Promotion(m1PromotionText);
+      const subset = parseUpstreamSubset(subsetText);
+      const generated = parseUpstreamSubset(
+        json({
+          version: subset.version,
+          repository: subset.repository,
+          revision: subset.revision,
+          groups: subset.groups.filter(
+            (group) =>
+              group.name !== ES2015_PROMOTION_GROUP &&
+              group.name !== ES2015_H0_PROMOTION_GROUP &&
+              group.name !== 'es2015/m1-reflect',
+          ),
+        }),
+      );
+
+      for (const overlapPath of [
+        promotionPaths(t0)[0],
+        promotionPaths(h0)[0],
+        promotionPaths(m1)[0],
+      ]) {
+        const overlapPromotion = parseEs2015Promotion(
+          json(
+            p1cPromotionFixture({
+              entries: [
+                {
+                  path: overlapPath,
+                  variants: 1,
+                  features: [],
+                  includeFeatures: [],
+                },
+              ],
+              rootCount: 1,
+              variantCount: 1,
+              ledgerSha256: sha256(`${overlapPath}\n`),
+            }),
+          ),
+        );
+        assertThrows(
+          () =>
+            mergePromotionSubsets(generated, [t0, h0, m1, overlapPromotion]),
+          Es2015PromotionError,
+        );
+      }
+
+      assertSame(
+        await readOptionalRoadmapFile(ES2015_P1C_PROMOTION_FILE, async () => {
+          const error = new Error('missing optional fixture');
+          Object.assign(error, { code: 'ENOENT' });
+          throw error;
+        }),
+        null,
+      );
+
+      const readError = new Error('unsupported optional fixture error');
+      Object.assign(readError, { code: 'EIO' });
+      let rejected = null;
+      try {
+        await readOptionalRoadmapFile(ES2015_P1C_PROMOTION_FILE, async () => {
+          throw readError;
+        });
+      } catch (error) {
+        rejected = error;
+      }
+      assertSame(rejected, readError);
+    },
+  },
+  {
+    name: 'P1C promotion authorization stays exact and leaves exclusions empty',
+    run: async () => {
+      const selection = parseEs5Selection(
+        await readFile(
+          new URL('tools/test262/es5-selection.json', REPOSITORY_ROOT),
+          'utf8',
+        ),
+      );
+      const subset = mergePromotionSubset(
+        parseUpstreamSubset(
+          json({
+            version: 1,
+            repository: PROMOTION_PIN.repository,
+            revision: PROMOTION_PIN.revision,
+            groups: [
+              {
+                name: 'baseline',
+                summary: 'Synthetic baseline.',
+                paths: ['test/language/base.js'],
+              },
+            ],
+          }),
+        ),
+        P1C_PROMOTION,
+      );
+      const authorizations = createEs2015PromotionAuthorizations({
+        promotionTexts: [P1C_PROMOTION_TEXT],
+        pin: PROMOTION_PIN,
+        policy: {
+          es2015Features: ['destructuring-binding'],
+          neutralFeatures: ['p1c-include-feature'],
+          laterFeatures: [],
+        },
+        subset,
+        inventory: [
+          ...P1C_PROMOTION.entries.map((entry) => ({
+            path: entry.path,
+            variants: entry.variants,
+            metadata: { features: [...entry.features] },
+            includeFeatures: [...entry.includeFeatures],
+          })),
+          {
+            path: 'test/language/statements/try/p1c-foreign.js',
+            variants: 2,
+            metadata: { features: ['destructuring-binding'] },
+            includeFeatures: ['p1c-include-feature'],
+          },
+        ],
+      });
+      const metadata = parseTest262Metadata(
+        '/*---\ndescription: exact P1C fixture\nfeatures: [destructuring-binding]\n---*/\n',
+      );
+
+      assertSame(
+        JSON.stringify(authorizations(P1C_AUTHORIZED_PATH, metadata)),
+        '["destructuring-binding","p1c-include-feature"]',
+      );
+      assertSame(
+        JSON.stringify(
+          authorizations(
+            'test/language/statements/try/p1c-foreign.js',
+            metadata,
+          ),
+        ),
+        '[]',
+      );
+      assertSame(
+        P1C_PROMOTION.entries.filter((entry) =>
+          matchExclusion(entry.path, selection.exclusions),
+        ).length,
+        0,
+      );
+    },
+  },
+  {
     name: 'ES2015 H0 evidence bundle validates every cross-artifact identity',
     run: () => {
       const bundle = validateEs2015H0EvidenceBundle({
@@ -1608,10 +1916,11 @@ export default [
     },
   },
   {
-    name: 'upstream report feature authority is scoped to exact M1 roots',
+    name: 'upstream report feature authority is scoped to exact M1 and P1C roots',
     run: async () => {
-      const createReportFeatures = createPromotionReportFeaturesForPath;
+      const createReportFeatures = createPromotionReportFeaturesForPromotions;
       assertSame(typeof createReportFeatures, 'function');
+      assertSame(typeof createPromotionReportFeaturesForPath, 'function');
       if (typeof createReportFeatures !== 'function') return;
       const [
         promotionText,
@@ -1628,7 +1937,10 @@ export default [
       const h0Promotion = parseEs2015Promotion(h0PromotionText);
       const m1Promotion = parseEs2015Promotion(m1PromotionText);
       const auditEvidence = JSON.parse(auditEvidenceText);
-      const reportFeaturesForPath = createReportFeatures(m1Promotion);
+      const reportFeaturesForPath = createReportFeatures([
+        m1Promotion,
+        P1C_PROMOTION,
+      ]);
       const m1Paths = new Set(m1Promotion.entries.map((entry) => entry.path));
       const m1AuditRecords = auditEvidence.auditRecords.filter(
         (/** @type {any} */ record) => m1Paths.has(record.file),
@@ -1659,6 +1971,13 @@ export default [
           `tracked M1 audit evidence drifted for ${entry.path}`,
         );
       }
+      for (const entry of P1C_PROMOTION.entries) {
+        assertSame(
+          JSON.stringify(reportFeaturesForPath(entry.path)),
+          JSON.stringify(entry.features),
+          entry.path,
+        );
+      }
 
       const sourceFeaturesByPath = new Map(
         Object.entries(M1_TRACKED_SOURCE_FEATURE_ORDER),
@@ -1678,6 +1997,16 @@ export default [
         JSON.stringify(divergent),
         JSON.stringify(M1_REPORT_ORDER_DIVERGENT_PATHS),
       );
+      const p1cDivergent = [];
+      for (const entry of P1C_PROMOTION.entries) {
+        if (
+          JSON.stringify(reportFeaturesForPath(entry.path)) !==
+          JSON.stringify(entry.features)
+        ) {
+          p1cDivergent.push(entry.path);
+        }
+      }
+      assertSame(JSON.stringify(p1cDivergent), '[]');
       assertSame(
         promotionPaths(promotion).every(
           (path) => reportFeaturesForPath(path) === undefined,
@@ -1693,6 +2022,34 @@ export default [
       assertSame(
         reportFeaturesForPath('test/language/nonpromotion.js'),
         undefined,
+      );
+      assertSame(
+        assertThrows(
+          () =>
+            createReportFeatures([
+              m1Promotion,
+              parseEs2015Promotion(
+                json(
+                  namedPromotionFixture({
+                    groupName: 'es2015/p1c-overlap',
+                    entries: [
+                      {
+                        path: m1Promotion.entries[0].path,
+                        variants: 1,
+                        features: [],
+                        includeFeatures: [],
+                      },
+                    ],
+                    rootCount: 1,
+                    variantCount: 1,
+                    ledgerSha256: sha256(`${m1Promotion.entries[0].path}\n`),
+                  }),
+                ),
+              ),
+            ]),
+          Error,
+        ).message,
+        `Promotion report features repeat path ${m1Promotion.entries[0].path}`,
       );
     },
   },

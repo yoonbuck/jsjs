@@ -42,7 +42,10 @@ import {
   mergePromotionSubsets,
   parseEs2015Promotion,
 } from './es2015-promotion.js';
-import { ES2015_M1_PROMOTION_FILE } from './es2015-roadmap-promotions.js';
+import {
+  ES2015_ROADMAP_PROMOTION_FILES,
+  readOptionalRoadmapFile,
+} from './es2015-roadmap-promotions.js';
 import { assertPinnedCheckout, readTest262Pin } from './upstream-run.js';
 import { inspectEngineGrammar, selectPaths } from './upstream-select-paths.js';
 
@@ -70,32 +73,21 @@ function readRepositoryFile(path) {
  * @returns {Promise<string[]>}
  */
 async function readSelectionPromotionTexts(readPromotion = readRepositoryFile) {
-  const [promotionText, h0PromotionText, m1PromotionText] = await Promise.all([
+  const [promotionText, h0PromotionText] = await Promise.all([
     readPromotion(ES2015_PROMOTION_FILE),
     readPromotion(ES2015_H0_PROMOTION_FILE),
-    readOptionalPromotion(ES2015_M1_PROMOTION_FILE, readPromotion),
   ]);
-  return [
-    promotionText,
-    h0PromotionText,
-    ...(m1PromotionText === null ? [] : [m1PromotionText]),
-  ];
-}
-
-/**
- * @param {string} path
- * @param {(path: string) => Promise<string>} readPromotion
- * @returns {Promise<string | null>}
- */
-async function readOptionalPromotion(path, readPromotion) {
-  try {
-    return await readPromotion(path);
-  } catch (error) {
-    if (/** @type {any} */ (error)?.code === 'ENOENT') {
-      return null;
+  const roadmapPromotionTexts = [];
+  for (const promotionFile of ES2015_ROADMAP_PROMOTION_FILES) {
+    const promotionText = await readOptionalRoadmapFile(
+      promotionFile,
+      readPromotion,
+    );
+    if (promotionText !== null) {
+      roadmapPromotionTexts.push(promotionText);
     }
-    throw error;
   }
+  return [promotionText, h0PromotionText, ...roadmapPromotionTexts];
 }
 
 /**
