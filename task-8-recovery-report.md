@@ -73,4 +73,26 @@ passed. No broad or full Test262 run and no full repository suite was run.
 ## Concerns
 
 None. The only intentional post-rebase delta is the focused M0 test
+
+## P1C Final Review Follow-up
+
+The final applied-HEAD review concern was valid: Task 1 had drifted to the live
+applied taxonomy and was no longer validating the frozen pre-application
+evidence. The ledger test now reads `tools/test262/es2015-p1c-baseline.json`,
+validates the frozen baseline schema/uniqueness/variant counts, and keeps the
+81-path SHA-256 identity check intact.
+
+### Verification
+
+```sh
+TZ=UTC node test/run-node.js test/node/es2015-p1c-ledger.test.js
+npm run typecheck
+npm run test:node
+./node_modules/.bin/eslint test/node/es2015-p1c-ledger.test.js test/run-node.js
+./node_modules/.bin/prettier --check test/node/es2015-p1c-ledger.test.js test/run-node.js
+git diff --check
+```
+
+All passed. No protected outputs or provenance files changed; only the Task 1
+test and this report were updated. The only intentional post-rebase delta is the focused M0 test
 reconciliation required by repaired BASE semantics.
