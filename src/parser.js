@@ -4760,8 +4760,17 @@ function unsupportedEs2015Message(
       isFunctionNode(parent) &&
       parentKey === 'params' &&
       parentIndex === parent.params.length - 1;
-    const validArgument =
+    const validBindingArgument =
       isUnknownAstNode(node.argument) || isIdentifierNode(node.argument);
+    const validAssignmentArgument =
+      validBindingArgument ||
+      isNodeTypeOrUnknown(node.argument, 'MemberExpression') ||
+      isNodeTypeOrUnknown(node.argument, 'ObjectPattern') ||
+      isNodeTypeOrUnknown(node.argument, 'ArrayPattern');
+    const validArgument =
+      patternContext === 'assignment'
+        ? validAssignmentArgument
+        : validBindingArgument;
 
     return (validArrayRest || validParameterRest) && validArgument
       ? undefined
