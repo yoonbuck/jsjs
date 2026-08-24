@@ -19,6 +19,7 @@
     "test262:upstream:check": "node tools/test262/upstream-run.js --check",
     "test262:es2015:m0": "node tools/test262/es2015-m0.js",
     "test262:es2015:m1": "node tools/test262/es2015-m1.js",
+    "test262:es2015:p1c": "node tools/test262/es2015-p1c.js",
     "test262:es2015:audit": "node tools/test262/es2015-audit.js",
     "test262:es2015:audit:check": "node tools/test262/es2015-audit.js --check",
     "test262:es2015:sync-promoted-report": "node tools/test262/es2015-audit.js --sync-promoted-report",
