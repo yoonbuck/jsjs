@@ -25,6 +25,7 @@ import benchmarkSummary from './node/benchmark-summary.test.js';
 import es2015Provenance from './node/es2015-provenance.test.js';
 import es2015M0 from './node/es2015-m0.test.js';
 import es2015M1 from './node/es2015-m1.test.js';
+import es2015P1c from './node/es2015-p1c.test.js';
 import profileAnalysis from './node/profile-analysis.test.js';
 import profilingCli from './node/profiling-cli.test.js';
 import repositoryInvariants from './node/repository-invariants.test.js';
@@ -90,6 +91,10 @@ const NODE_ONLY_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/node/es2015-p1c-ledger.test.js',
     tests: es2015P1cLedger,
+  }),
+  Object.freeze({
+    file: 'test/node/es2015-p1c.test.js',
+    tests: es2015P1c,
   }),
   Object.freeze({
     file: 'test/node/upstream-select.test.js',
