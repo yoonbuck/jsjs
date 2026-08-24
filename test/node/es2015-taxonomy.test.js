@@ -3012,6 +3012,99 @@ export default [
     },
   },
   {
+    name: 'ES2015 audit applied P1C authority omits serialization-only hashes while retaining promotion semantics',
+    run: async () => {
+      const roots = new Map(AUDIT_ROOTS);
+      roots.set(
+        AUDIT_P1C_PATH,
+        '/*---\ndescription: P1C promotion fixture.\nes6id: 13.15\nfeatures: [destructuring-binding]\nincludes: [p1cHelper.js]\n---*/\n',
+      );
+      const productionManifest = JSON.parse(
+        readFileSyncText(
+          new URL(
+            '../../tools/test262/es2015-provenance.json',
+            import.meta.url,
+          ),
+          'utf8',
+        ),
+      );
+      productionManifest.roadmapAuthorities =
+        productionManifest.roadmapAuthorities.filter(
+          (/** @type {{ code: string }} */ authority) =>
+            authority.code === 'P1C',
+        );
+      const productionManifestText = `${JSON.stringify(
+        productionManifest,
+        null,
+        2,
+      )}\n`;
+      const dependencies = auditDependencies({
+        roots,
+        subset: AUDIT_P1C_SUBSET,
+        promotion: AUDIT_PROMOTION,
+        auditEvidence: auditEvidence({
+          auditRecords: [...AUDIT_RECORDS, ...AUDIT_P1C_RECORDS],
+        }),
+        includeDefinitions: new Map([
+          ['p1cHelper.js', { features: ['p1c-include-feature'], includes: [] }],
+        ]),
+        files: new Map([
+          [
+            'tools/test262/es2015-policy.json',
+            JSON.stringify({
+              ...JSON.parse(POLICY),
+              es2015Features: ['destructuring-binding', 'let'],
+              neutralFeatures: ['cross-realm', 'p1c-include-feature'],
+            }),
+          ],
+          ['tools/test262/es2015-p1c-promotion.json', AUDIT_P1C_PROMOTION],
+          ['tools/test262/es2015-p1c-disposition.json', AUDIT_P1C_DISPOSITION],
+        ]),
+        readProvenanceManifest: async () => productionManifestText,
+        readDecisionFragments: async () =>
+          new Map(
+            ES2015_PROVENANCE_DECISION_CODES.map((code) => [
+              code,
+              readFileSyncText(
+                new URL(
+                  `../../${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+                  import.meta.url,
+                ),
+                'utf8',
+              ),
+            ]),
+          ),
+      });
+
+      assertSame(await auditEs2015Taxonomy([], dependencies), 0);
+      const artifact = JSON.parse(fixtureOutput(dependencies, AUDIT_PATH));
+      const p1cClassification = artifact.classifications.find(
+        (/** @type {any} */ entry) => entry.path === AUDIT_P1C_PATH,
+      );
+
+      assertSame(
+        Object.prototype.hasOwnProperty.call(
+          artifact.inputs,
+          'p1cDispositionSha256',
+        ),
+        false,
+      );
+      assertSame(
+        Object.prototype.hasOwnProperty.call(
+          artifact.inputs,
+          'p1cPromotionSha256',
+        ),
+        false,
+      );
+      assertSame(artifact.inputs.promotionSha256, sha256(AUDIT_PROMOTION));
+      assertSame(p1cClassification?.status, 'selected-passing');
+      assertSame(
+        JSON.stringify(p1cClassification?.features),
+        '["destructuring-binding"]',
+      );
+    },
+  },
+  {
     name: 'checked-in P1C evidence is fully selected in the applied taxonomy and audit',
     run: async () => {
       const [

@@ -1,9 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { assertSame, assertThrows } from '../harness/assert.js';
-import { createNodeTest262Host } from '../../tools/test262/adapters/node.js';
 import { buildEs2015Inventory } from '../../tools/test262/es2015-taxonomy.js';
 import { parseEs2015Promotion } from '../../tools/test262/es2015-promotion.js';
 import {
@@ -14,11 +13,7 @@ import {
   parseEs5Selection,
   matchExclusion,
 } from '../../tools/test262/es5-selection.js';
-import { readTest262HarnessDefinitions } from '../../tools/test262/harness-definitions.js';
-import {
-  assertPinnedCheckout,
-  readTest262Pin,
-} from '../../tools/test262/pin.js';
+import { readTest262Pin } from '../../tools/test262/pin.js';
 import {
   parseUpstreamSubset,
   upstreamSubsetPaths,
@@ -276,10 +271,13 @@ export default [
     run: async () => {
       const { verifyP1CLedger } = await loadP1C();
       const { ledgerText, taxonomy, selection, subset } = await readP1CInputs();
-      const inventory = await readPinnedP1CInventory(ledgerText, taxonomy);
+      const pin = await readTest262Pin(REPOSITORY_ROOT);
+      const inventory = syntheticP1CInventory(ledgerText, taxonomy);
       const paths = verifyP1CLedger(ledgerText, taxonomy);
       const selected = new Set(upstreamSubsetPaths(subset));
 
+      assertSame(taxonomy.pin.repository, pin.repository);
+      assertSame(taxonomy.pin.revision, pin.revision);
       assertSame(inventory.length, 81);
       assertSame(
         inventory.reduce((sum, root) => sum + root.variants, 0),
@@ -320,6 +318,18 @@ export default [
       assertSame(
         paths.filter((sourcePath) => selected.has(sourcePath)).length,
         0,
+      );
+
+      const unknownInclude = /** @type {any} */ (structuredClone(taxonomy));
+      findClassification(unknownInclude, paths[0]).includes = [
+        'unknown-p1c-helper.js',
+      ];
+      assertSame(
+        assertThrows(
+          () => syntheticP1CInventory(ledgerText, unknownInclude),
+          Error,
+        ).message,
+        'ES2015 include unknown-p1c-helper.js is unknown',
       );
     },
   },
@@ -1503,22 +1513,19 @@ export default [
       const { main } = await loadP1C();
       const inputs = await readP1CProjectionInputs();
       const taxonomy = JSON.parse(inputs.taxonomyText);
-      const executionPath =
-        '.superpowers/sdd/2026-08-23-p1c-catch-binding/task-5/unit-execution.json';
-      const outputPath =
-        '.superpowers/sdd/2026-08-23-p1c-catch-binding/task-5/unit-authority';
-      const outputUrl = new URL(outputPath, REPOSITORY_ROOT);
-      const executionUrl = new URL(executionPath, REPOSITORY_ROOT);
+      const fixturePath = `.superpowers/test/es2015-p1c-${randomUUID()}`;
+      const fixtureUrl = new URL(`${fixturePath}/`, REPOSITORY_ROOT);
+      const executionPath = `${fixturePath}/unit-execution.json`;
+      const outputPath = `${fixturePath}/unit-authority`;
       const sourceByPath = syntheticP1CSources(inputs.ledgerText, taxonomy);
       const message = await (async () => {
-        await rm(outputUrl, { recursive: true, force: true });
-        await rm(executionUrl, { force: true });
-        await writeFile(
-          executionUrl,
-          renderP1CJson(syntheticP1CExecution(inputs.ledgerText, taxonomy)),
-          'utf8',
-        );
+        await mkdir(fixtureUrl, { recursive: true });
         try {
+          await writeFile(
+            new URL('unit-execution.json', fixtureUrl),
+            renderP1CJson(syntheticP1CExecution(inputs.ledgerText, taxonomy)),
+            'utf8',
+          );
           try {
             await main(
               [
@@ -1553,8 +1560,7 @@ export default [
           }
           return '';
         } finally {
-          await rm(outputUrl, { recursive: true, force: true });
-          await rm(executionUrl, { force: true });
+          await rm(fixtureUrl, { recursive: true, force: true });
         }
       })();
 
@@ -1648,29 +1654,6 @@ async function readP1CProjectionInputs() {
     conformanceText,
     featuresText,
   };
-}
-
-/**
- * @param {string} ledgerText
- * @param {{ classifications?: readonly any[] }} taxonomy
- */
-async function readPinnedP1CInventory(ledgerText, taxonomy) {
-  const { buildP1CInventory } = await loadP1C();
-  const pin = await readTest262Pin(REPOSITORY_ROOT);
-  await assertPinnedCheckout(pin, REPOSITORY_ROOT);
-  const host = createNodeTest262Host({
-    root: new URL(`${pin.checkoutPath.replace(/\/$/u, '')}/`, REPOSITORY_ROOT),
-  });
-  const includeDefinitions = await readTest262HarnessDefinitions(
-    pin.checkoutPath,
-    REPOSITORY_ROOT,
-  );
-  return buildP1CInventory({
-    ledgerText,
-    taxonomy,
-    readRoot: (sourcePath) => host.readTest(sourcePath),
-    includeDefinitions,
-  });
 }
 
 /**

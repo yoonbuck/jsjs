@@ -283,6 +283,10 @@ export async function main(argv = [], dependencies = {}) {
     (/** @type {any} */ authority) =>
       authority.code === 'M1' && authority.state === 'applied',
   );
+  const p1cAuthority = roadmapAuthorities.find(
+    (/** @type {any} */ authority) =>
+      authority.code === 'P1C' && authority.state === 'applied',
+  );
   const m1DispositionText =
     m1Authority === undefined
       ? null
@@ -541,8 +545,8 @@ export async function main(argv = [], dependencies = {}) {
     reportText,
     auditEvidenceText,
     promotionText,
-    p1cDispositionText,
-    p1cPromotionText,
+    p1cDispositionText: p1cAuthority === undefined ? p1cDispositionText : null,
+    p1cPromotionText: p1cAuthority === undefined ? p1cPromotionText : null,
     m1PromotionText,
     h0DispositionText,
     h0PromotionText,
