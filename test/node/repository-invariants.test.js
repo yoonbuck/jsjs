@@ -204,6 +204,18 @@ const ALLOWED_FORMAT_EXCLUSIONS = Object.freeze({
     'Generated M1 path evidence, whose exact bytes are owned by the applied roadmap authority.',
   'tools/test262/es2015-m1-promotion.json':
     'Generated M1 promotion evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-p1c-baseline.json':
+    'Generated P1C baseline evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-p1c-disposition.json':
+    'Generated P1C disposition evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-p1c-owner-deltas.json':
+    'Generated P1C owner-delta evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-p1c-owner-map.json':
+    'Generated P1C owner-map evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-p1c-paths.json':
+    'Generated P1C path evidence, whose exact bytes are owned by the applied roadmap authority.',
+  'tools/test262/es2015-p1c-promotion.json':
+    'Generated P1C promotion evidence, whose exact bytes are owned by the applied roadmap authority.',
 });
 
 const PROVENANCE_OWNERSHIP_REASON_FRAGMENT =

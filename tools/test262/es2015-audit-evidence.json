@@ -127951,493 +127951,493 @@
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-init-iter-close.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-init-iter-close.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-init-iter-get-err-array-prototype.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-init-iter-get-err-array-prototype.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-init-iter-get-err.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-init-iter-get-err.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-init-iter-no-close.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-init-iter-no-close.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-name-iter-val.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-name-iter-val.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-elem-init.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-elem-init.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-elem-iter.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-elem-iter.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-elision-init.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-elision-init.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-elision-iter.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-elision-iter.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-empty-init.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-empty-init.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-empty-iter.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-empty-iter.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-rest-init.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-rest-init.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-rest-iter.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-rest-iter.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-val-null.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-ary-val-null.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-exhausted.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-exhausted.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-arrow.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-arrow.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-class.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-class.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-cover.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-cover.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-fn.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-fn.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-gen.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-gen.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-hole.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-hole.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-skipped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-skipped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-throws.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-throws.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-undef.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-undef.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-unresolvable.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-unresolvable.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-complete.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-complete.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-done.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-done.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-step-err.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-step-err.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-val-array-prototype.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-val-array-prototype.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-val-err.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-val-err.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-val.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-val.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-obj-id-init.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-obj-id-init.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-obj-id.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-obj-id.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-obj-prop-id-init.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-obj-prop-id-init.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-obj-prop-id.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-obj-prop-id.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-obj-val-null.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-obj-val-null.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-obj-val-undef.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elem-obj-val-undef.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elision-exhausted.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elision-exhausted.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elision-step-err.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elision-step-err.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elision.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-elision.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-empty.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-empty.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -128491,85 +128491,85 @@
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-rest-id-direct.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-rest-id-direct.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-rest-id-elision-next-err.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-rest-id-elision-next-err.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-rest-id-elision.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-rest-id-elision.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-rest-id-exhausted.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-rest-id-exhausted.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-rest-id-iter-step-err.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-rest-id-iter-step-err.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-rest-id-iter-val-err.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-rest-id-iter-val-err.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-rest-id.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/ary-ptrn-rest-id.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -128671,361 +128671,361 @@
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-init-null.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-init-null.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-init-undefined.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-init-undefined.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-empty.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-empty.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-get-value-err.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-get-value-err.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-arrow.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-arrow.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-class.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-class.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-cover.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-cover.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-fn.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-fn.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-gen.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-gen.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-skipped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-skipped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-throws.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-throws.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-unresolvable.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-init-unresolvable.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-trailing-comma.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-id-trailing-comma.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-list-err.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-list-err.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-ary-init.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-ary-init.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-ary-trailing-comma.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-ary-trailing-comma.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-ary-value-null.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-ary-value-null.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-ary.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-ary.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-eval-err.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-eval-err.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-id-get-value-err.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-id-get-value-err.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-id-init-skipped.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-id-init-skipped.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-id-init-throws.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-id-init-throws.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-id-init-unresolvable.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-id-init-unresolvable.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-id-init.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-id-init.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-id-trailing-comma.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-id-trailing-comma.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-id.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-id.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-obj-init.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-obj-init.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-obj-value-null.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-obj-value-null.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-obj-value-undef.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-obj-value-undef.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-obj.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/dstr/obj-ptrn-prop-obj.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -129067,31 +129067,31 @@
       "type": "test",
       "file": "test/language/statements/try/scope-catch-block-lex-open.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/scope-catch-block-lex-open.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/scope-catch-param-lex-open.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/scope-catch-param-lex-open.js",
       "variant": "strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
       "file": "test/language/statements/try/scope-catch-param-var-none.js",
       "variant": "non-strict",
-      "status": "failed"
+      "status": "passed"
     },
     {
       "type": "test",
@@ -136086,93 +136086,12 @@
     "test/language/statements/try/cptn-finally-skip-catch.js": "remaining-language-runtime-semantics",
     "test/language/statements/try/cptn-finally-wo-catch.js": "remaining-language-runtime-semantics",
     "test/language/statements/try/cptn-try.js": "remaining-language-runtime-semantics",
-    "test/language/statements/try/dstr/ary-init-iter-close.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-init-iter-get-err-array-prototype.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-init-iter-get-err.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-init-iter-no-close.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-name-iter-val.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-ary-elem-init.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-ary-elem-iter.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-ary-elision-init.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-ary-elision-iter.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-ary-empty-init.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-ary-empty-iter.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-ary-rest-init.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-ary-rest-iter.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-ary-val-null.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-init-exhausted.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-arrow.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-class.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-cover.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-fn.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-gen.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-init-hole.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-init-skipped.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-init-throws.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-init-undef.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-init-unresolvable.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-complete.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-done.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-step-err.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-val-array-prototype.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-val-err.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-val.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-obj-id-init.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-obj-id.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-obj-prop-id-init.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-obj-prop-id.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-obj-val-null.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elem-obj-val-undef.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elision-exhausted.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elision-step-err.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-elision.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-empty.js": "early-errors-and-declaration-instantiation",
     "test/language/statements/try/dstr/ary-ptrn-rest-ary-elem.js": "early-errors-and-declaration-instantiation",
     "test/language/statements/try/dstr/ary-ptrn-rest-ary-elision.js": "early-errors-and-declaration-instantiation",
     "test/language/statements/try/dstr/ary-ptrn-rest-ary-empty.js": "early-errors-and-declaration-instantiation",
     "test/language/statements/try/dstr/ary-ptrn-rest-ary-rest.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-rest-id-direct.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-rest-id-elision-next-err.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-rest-id-elision.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-rest-id-exhausted.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-rest-id-iter-step-err.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-rest-id-iter-val-err.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/ary-ptrn-rest-id.js": "early-errors-and-declaration-instantiation",
     "test/language/statements/try/dstr/ary-ptrn-rest-obj-id.js": "early-errors-and-declaration-instantiation",
     "test/language/statements/try/dstr/ary-ptrn-rest-obj-prop-id.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-init-null.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-init-undefined.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-empty.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-id-get-value-err.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-arrow.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-class.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-cover.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-fn.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-gen.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-id-init-skipped.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-id-init-throws.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-id-init-unresolvable.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-id-trailing-comma.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-list-err.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-ary-init.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-ary-trailing-comma.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-ary-value-null.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-ary.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-eval-err.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-id-get-value-err.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-id-init-skipped.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-id-init-throws.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-id-init-unresolvable.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-id-init.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-id-trailing-comma.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-id.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-obj-init.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-obj-value-null.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-obj-value-undef.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/dstr/obj-ptrn-prop-obj.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/scope-catch-block-lex-open.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/scope-catch-param-lex-open.js": "early-errors-and-declaration-instantiation",
-    "test/language/statements/try/scope-catch-param-var-none.js": "early-errors-and-declaration-instantiation",
     "test/language/statements/try/tco-catch-finally.js": "proper-tail-calls",
     "test/language/statements/try/tco-catch.js": "proper-tail-calls",
     "test/language/statements/try/tco-finally.js": "proper-tail-calls",

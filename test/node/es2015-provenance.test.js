@@ -115,6 +115,17 @@ const H0_PROTECTED_OUTPUT_PATHS = Object.freeze([
   'tools/test262/es2015-taxonomy.json',
   'tools/test262/upstream-subset.json',
 ]);
+const P1C_CONSUMER_BASE_SHA = 'edccfb8822339dab53c47bbb8c4ae5cc2db93b1b';
+const P1C_EVIDENCE_PATHS = Object.freeze([
+  'tools/test262/es2015-p1c-baseline.json',
+  'tools/test262/es2015-p1c-disposition.json',
+  'tools/test262/es2015-p1c-owner-deltas.json',
+  'tools/test262/es2015-p1c-owner-map.json',
+  'tools/test262/es2015-p1c-paths.json',
+  'tools/test262/es2015-p1c-promotion.json',
+]);
+const P1C_PROTECTED_PROJECTION_SHA256 =
+  '30354b59b9dea45a94b47ca5c1edf270c161e3230f04661e4ce6cfe8f9089b0b';
 const H0_PROJECTED_OUTPUT_SHA256 = Object.freeze({
   'docs/conformance.md':
     'b334793aba47b475dd0f8090e6da9f73c0b2b0c75964e5562995f6deb144a7c2',
@@ -711,6 +722,11 @@ function readGitFixtureText(revision, path) {
       maxBuffer: 64 * 1024 * 1024,
     }),
   );
+}
+
+/** @param {string} path */
+function readCurrentRepositoryText(path) {
+  return readFileSyncText(new URL(`../../${path}`, import.meta.url), 'utf8');
 }
 
 /** @param {string} revision @param {string} path @returns {any} */
@@ -2933,6 +2949,62 @@ function exactAppliedH0ProjectionFixture() {
         new Map([[TAXONOMY_PATH, PRESERVED_H0_SOURCE_TAXONOMY_TEXT]]),
       ],
     ]),
+  };
+}
+
+function exactAppliedP1CProjectionFixture() {
+  const baseManifestText = readGitFixtureText(
+    P1C_CONSUMER_BASE_SHA,
+    ES2015_PROVENANCE_FILE,
+  );
+  const headManifestText = readCurrentRepositoryText(ES2015_PROVENANCE_FILE);
+  const baseManifestValue = JSON.parse(baseManifestText);
+  const headManifestValue = JSON.parse(headManifestText);
+  const authority = baseManifestValue.roadmapAuthorities.find(
+    (/** @type {{ code: string }} */ candidate) => candidate.code === 'P1C',
+  );
+  if (authority === undefined) {
+    throw new Error('exact P1C fixture is missing its BASE authority');
+  }
+  const baseFiles = new Map([
+    [
+      'tools/test262/features.json',
+      readGitFixtureText(P1C_CONSUMER_BASE_SHA, 'tools/test262/features.json'),
+    ],
+  ]);
+  const headFiles = new Map([
+    [
+      'tools/test262/features.json',
+      readCurrentRepositoryText('tools/test262/features.json'),
+    ],
+  ]);
+  for (const output of authority.protectedOutputs) {
+    if (output.operation !== 'add-exact') {
+      baseFiles.set(
+        output.path,
+        readGitFixtureText(P1C_CONSUMER_BASE_SHA, output.path),
+      );
+    }
+    headFiles.set(output.path, readCurrentRepositoryText(output.path));
+  }
+  const changes = [
+    { status: 'M', path: ES2015_PROVENANCE_FILE },
+    ...authority.protectedOutputs.map(
+      (/** @type {{ operation: string, path: string }} */ output) => ({
+        status: output.operation === 'add-exact' ? 'A' : 'M',
+        path: output.path,
+      }),
+    ),
+  ];
+  return {
+    authority,
+    baseFiles,
+    baseManifestText,
+    baseManifestValue,
+    changes,
+    headFiles,
+    headManifestText,
+    headManifestValue,
   };
 }
 
@@ -9777,6 +9849,324 @@ export default [
         );
         assertSame(error.message, scenario.message);
       }
+    },
+  },
+  {
+    name: 'ES2015 provenance accepts the exact applied P1C protected projection',
+    run: async () => {
+      const fixture = exactAppliedP1CProjectionFixture();
+      assertSame(
+        provenance.roadmapAggregateProjectionSha256(fixture.authority),
+        P1C_PROTECTED_PROJECTION_SHA256,
+      );
+      assertSame(
+        json(
+          fixture.authority.evidence.map(
+            (/** @type {{ path: string }} */ entry) => entry.path,
+          ),
+        ),
+        json(P1C_EVIDENCE_PATHS),
+      );
+      const marker =
+        /** @type {Parameters<typeof validateRoadmapProtectedOutputs>[2]['marker']} */ (
+          parseRoadmapAuthorityMarker(
+            roadmapConsumptionMarker({
+              code: 'P1C',
+              issue: fixture.authority.issue,
+              base: P1C_CONSUMER_BASE_SHA,
+              sourcePathSha256: fixture.authority.source.pathSha256,
+              sourceEntrySha256: fixture.authority.source.entryLedgerSha256,
+              protectedProjectionSha256: P1C_PROTECTED_PROJECTION_SHA256,
+            }),
+          )
+        );
+      const changes = fixture.changes.map((change) => ({
+        ...change,
+        sourcePath: null,
+      }));
+      assertSame(
+        await validateRoadmapAuthorityConsumption(
+          fixture.baseManifestValue,
+          fixture.headManifestValue,
+          marker,
+          {
+            deps: rangeCheckDependencies({
+              changes: fixture.changes,
+              baseSha: P1C_CONSUMER_BASE_SHA,
+              headSha: RANGE_HEAD_SHA,
+              baseManifestText: fixture.baseManifestText,
+              headManifestText: fixture.headManifestText,
+              baseFiles: fixture.baseFiles,
+              headFiles: fixture.headFiles,
+            }),
+            base: P1C_CONSUMER_BASE_SHA,
+            head: RANGE_HEAD_SHA,
+            changes,
+          },
+        ),
+        0,
+      );
+    },
+  },
+  {
+    name: 'ES2015 provenance rejects stale, partial, foreign, replayed, or mutated P1C consumption',
+    run: async () => {
+      const fixture = exactAppliedP1CProjectionFixture();
+      const marker =
+        /** @type {Parameters<typeof validateRoadmapProtectedOutputs>[2]['marker']} */ (
+          parseRoadmapAuthorityMarker(
+            roadmapConsumptionMarker({
+              code: 'P1C',
+              issue: fixture.authority.issue,
+              base: P1C_CONSUMER_BASE_SHA,
+              sourcePathSha256: fixture.authority.source.pathSha256,
+              sourceEntrySha256: fixture.authority.source.entryLedgerSha256,
+              protectedProjectionSha256: P1C_PROTECTED_PROJECTION_SHA256,
+            }),
+          )
+        );
+      /**
+       * @param {{
+       *   baseManifestValue?: any,
+       *   headManifestValue?: any,
+       *   changes?: readonly { status: string, path: string }[],
+       *   baseFiles?: ReadonlyMap<string, string>,
+       *   headFiles?: ReadonlyMap<string, string>,
+       * }} [options]
+       */
+      const validate = async (options = {}) => {
+        const baseManifestValue =
+          options.baseManifestValue ?? fixture.baseManifestValue;
+        const headManifestValue =
+          options.headManifestValue ?? fixture.headManifestValue;
+        const changes = options.changes ?? fixture.changes;
+        return validateRoadmapAuthorityConsumption(
+          baseManifestValue,
+          headManifestValue,
+          marker,
+          {
+            deps: rangeCheckDependencies({
+              changes,
+              baseSha: P1C_CONSUMER_BASE_SHA,
+              headSha: RANGE_HEAD_SHA,
+              baseManifestText:
+                renderEs2015ProvenanceManifest(baseManifestValue),
+              headManifestText:
+                renderEs2015ProvenanceManifest(headManifestValue),
+              baseFiles: options.baseFiles ?? fixture.baseFiles,
+              headFiles: options.headFiles ?? fixture.headFiles,
+            }),
+            base: P1C_CONSUMER_BASE_SHA,
+            head: RANGE_HEAD_SHA,
+            changes: changes.map((change) => ({
+              ...change,
+              sourcePath: null,
+            })),
+          },
+        );
+      };
+
+      const absentBase = structuredClone(fixture.baseManifestValue);
+      absentBase.roadmapAuthorities = absentBase.roadmapAuthorities.filter(
+        (/** @type {{ code: string }} */ authority) => authority.code !== 'P1C',
+      );
+      assertSame(
+        (await rejected(() => validate({ baseManifestValue: absentBase })))
+          .message,
+        'P1C roadmap authority must exist in BASE',
+      );
+
+      const appliedBase = structuredClone(fixture.baseManifestValue);
+      appliedBase.roadmapAuthorities.find(
+        (/** @type {{ code: string }} */ authority) => authority.code === 'P1C',
+      ).state = 'applied';
+      assertSame(
+        (await rejected(() => validate({ baseManifestValue: appliedBase })))
+          .message,
+        'P1C roadmap authority must be pending in BASE',
+      );
+
+      const pendingHead = structuredClone(fixture.baseManifestValue);
+      assertSame(
+        (await rejected(() => validate({ headManifestValue: pendingHead })))
+          .message,
+        'P1C roadmap authority must transition only from pending to applied',
+      );
+
+      const mutatedHead = structuredClone(fixture.headManifestValue);
+      mutatedHead.roadmapAuthorities.find(
+        (/** @type {{ code: string }} */ authority) => authority.code === 'P1C',
+      ).source.rootCount += 1;
+      assertSame(
+        (await rejected(() => validate({ headManifestValue: mutatedHead })))
+          .message,
+        'P1C roadmap authority must transition only from pending to applied',
+      );
+
+      const staleBaseFiles = new Map(fixture.baseFiles);
+      staleBaseFiles.set(
+        TAXONOMY_PATH,
+        `${requiredFixtureText(fixture.baseFiles, TAXONOMY_PATH)} `,
+      );
+      assertSame(
+        (
+          await rejected(() =>
+            validate({
+              baseFiles: staleBaseFiles,
+            }),
+          )
+        ).message,
+        'roadmap-reclassification:P1C protected output tools/test262/es2015-taxonomy.json BASE bytes do not match P1C roadmap authority',
+      );
+
+      const partialChanges = fixture.changes.filter(
+        (change) => change.path !== 'tools/test262/es2015-p1c-owner-map.json',
+      );
+      assertSame(
+        (
+          await rejected(() =>
+            validate({
+              changes: partialChanges,
+            }),
+          )
+        ).message,
+        'roadmap-reclassification:P1C protected output tools/test262/es2015-p1c-owner-map.json must change exactly once',
+      );
+
+      const foreignPath = 'tools/test262/es2015-p1c-foreign.json';
+      assertSame(
+        (
+          await rejected(() =>
+            validate({
+              changes: [...fixture.changes, { status: 'A', path: foreignPath }],
+              headFiles: new Map([...fixture.headFiles, [foreignPath, '{}\n']]),
+            }),
+          )
+        ).message,
+        `roadmap-reclassification:P1C protected outputs include unexpected generated path ${foreignPath}`,
+      );
+
+      for (const ownerPath of [
+        'tools/test262/es2015-p1c-owner-deltas.json',
+        'tools/test262/es2015-p1c-owner-map.json',
+      ]) {
+        const headFiles = new Map(fixture.headFiles);
+        headFiles.set(ownerPath, '[{}]\n');
+        assertSame(
+          (
+            await rejected(() =>
+              validate({
+                headFiles,
+              }),
+            )
+          ).message,
+          `roadmap-reclassification:P1C evidence ${ownerPath} HEAD bytes do not match P1C roadmap authority`,
+          ownerPath,
+        );
+      }
+
+      const promotionPath = 'tools/test262/es2015-p1c-promotion.json';
+      const promotion = JSON.parse(
+        requiredFixtureText(fixture.headFiles, promotionPath),
+      );
+      const featureEntry = promotion.entries.find(
+        (/** @type {{ features: readonly string[] }} */ entry) =>
+          entry.features.length > 1,
+      );
+      if (featureEntry === undefined) {
+        throw new Error('missing multi-feature P1C promotion entry');
+      }
+      featureEntry.features.reverse();
+      const featureOrderFiles = new Map(fixture.headFiles);
+      featureOrderFiles.set(promotionPath, prettyJson(promotion));
+      assertSame(
+        (
+          await rejected(() =>
+            validate({
+              headFiles: featureOrderFiles,
+            }),
+          )
+        ).message,
+        `roadmap-reclassification:P1C evidence ${promotionPath} HEAD bytes do not match P1C roadmap authority`,
+      );
+
+      const includeOrderPromotion = JSON.parse(
+        requiredFixtureText(fixture.headFiles, promotionPath),
+      );
+      includeOrderPromotion.entries[0].includeFeatures = ['z', 'a'];
+      const includeOrderFiles = new Map(fixture.headFiles);
+      includeOrderFiles.set(promotionPath, prettyJson(includeOrderPromotion));
+      assertSame(
+        (
+          await rejected(() =>
+            validate({
+              headFiles: includeOrderFiles,
+            }),
+          )
+        ).message,
+        `roadmap-reclassification:P1C evidence ${promotionPath} HEAD bytes do not match P1C roadmap authority`,
+      );
+
+      const reportPath = 'docs/test262-report.jsonl';
+      const sourcePaths = new Set(
+        JSON.parse(
+          requiredFixtureText(
+            fixture.headFiles,
+            'tools/test262/es2015-p1c-paths.json',
+          ),
+        ),
+      );
+      const reportLines = requiredFixtureText(fixture.headFiles, reportPath)
+        .trimEnd()
+        .split('\n');
+      const promotedIndexes = reportLines
+        .map((line, index) => ({ index, record: JSON.parse(line) }))
+        .filter(
+          ({ record }) =>
+            record.type === 'test' && sourcePaths.has(record.file),
+        )
+        .map(({ index }) => index);
+      [reportLines[promotedIndexes[0]], reportLines[promotedIndexes[1]]] = [
+        reportLines[promotedIndexes[1]],
+        reportLines[promotedIndexes[0]],
+      ];
+      const reportOrderFiles = new Map(fixture.headFiles);
+      reportOrderFiles.set(reportPath, `${reportLines.join('\n')}\n`);
+      assertSame(
+        (
+          await rejected(() =>
+            validate({
+              headFiles: reportOrderFiles,
+            }),
+          )
+        ).message,
+        'roadmap-reclassification:P1C protected output docs/test262-report.jsonl must match the canonical selected report',
+      );
+
+      const selectionPath = 'tools/test262/es5-selection.json';
+      assertSame(
+        (
+          await rejected(() =>
+            validate({
+              changes: [
+                ...fixture.changes,
+                { status: 'M', path: selectionPath },
+              ],
+              headFiles: new Map([
+                ...fixture.headFiles,
+                [
+                  selectionPath,
+                  `${readGitFixtureText(
+                    P1C_CONSUMER_BASE_SHA,
+                    selectionPath,
+                  )} `,
+                ],
+              ]),
+            }),
+          )
+        ).message,
+        `roadmap-reclassification:P1C protected outputs include unexpected protected path ${selectionPath}`,
+      );
     },
   },
   {

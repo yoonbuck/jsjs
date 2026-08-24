@@ -798,6 +798,11 @@ async function taxonomyBeforeAppliedRoadmapAuthorities(options) {
   let taxonomyText = options.afterTaxonomyText;
   for (const evidence of [
     {
+      code: 'P1C',
+      baselinePath: 'tools/test262/es2015-p1c-baseline.json',
+      dispositionPath: 'tools/test262/es2015-p1c-disposition.json',
+    },
+    {
       code: 'M1',
       baselinePath: 'tools/test262/es2015-m1-baseline.json',
       dispositionPath: 'tools/test262/es2015-m1-disposition.json',

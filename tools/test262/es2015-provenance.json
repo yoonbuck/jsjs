@@ -15179,7 +15179,7 @@
       "code": "P1C",
       "issue": 116,
       "parentIssue": 70,
-      "state": "pending",
+      "state": "applied",
       "source": {
         "baseTaxonomySha256": "fba700539b05edd67b6cf67e4c0a1361398a2d0f04212bc7080a83f44abf577a",
         "rootCount": 81,

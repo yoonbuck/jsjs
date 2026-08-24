@@ -36,12 +36,14 @@ const KNOWN_GOOD_SUBSET_FILE = 'tools/test262/known-good-subset.json';
 
 const KNOWN_GOOD_PATH_COUNT = 12434;
 
-const GENERATED_PATH_COUNT = 14272;
+const GENERATED_PATH_COUNT = 14353;
 const PROMOTION_GROUP = 'es2015/audit-passing-promotion';
 const H0_PROMOTION_GROUP = 'es2015/h0-cross-realm-passed';
 const H0_PROMOTION_ROOT_COUNT = 40;
 const M1_PROMOTION_GROUP = 'es2015/m1-reflect';
 const M1_PROMOTION_ROOT_COUNT = 103;
+const P1C_PROMOTION_GROUP = 'es2015/p1c-catch-binding';
+const P1C_PROMOTION_ROOT_COUNT = 81;
 
 const ISSUE_25_EXPANSION_PATH_COUNT = 1684;
 
@@ -216,7 +218,7 @@ export default [
     },
   },
   {
-    name: 'generated selection retains issue #25, generator, H0, and M1 promotion roots',
+    name: 'generated selection retains issue #25, generator, H0, M1, and P1C promotion roots',
     run: async () => {
       const pin = await readTest262Pin();
       const [policyText, baselineText, currentText, symbolSpeciesSource] =
@@ -249,6 +251,12 @@ export default [
       const m1PromotionPaths = new Set(
         m1Promotion.flatMap((group) => group.paths),
       );
+      const p1cPromotion = currentSubset.groups.filter(
+        (group) => group.name === P1C_PROMOTION_GROUP,
+      );
+      const p1cPromotionPaths = new Set(
+        p1cPromotion.flatMap((group) => group.paths),
+      );
       const currentPaths = new Set(
         currentSubset.groups
           .filter((group) => group.name !== PROMOTION_GROUP)
@@ -263,7 +271,8 @@ export default [
         (path) =>
           !GENERATOR_ROOTS.includes(path) &&
           !h0PromotionPaths.has(path) &&
-          !m1PromotionPaths.has(path),
+          !m1PromotionPaths.has(path) &&
+          !p1cPromotionPaths.has(path),
       );
       const nonbaselineSources = await Promise.all(
         nonbaselinePaths.map((path) =>
@@ -276,6 +285,7 @@ export default [
           !GENERATOR_ROOTS.includes(path) &&
           !h0PromotionPaths.has(path) &&
           !m1PromotionPaths.has(path) &&
+          !p1cPromotionPaths.has(path) &&
           !nonbaselineFrontmatter[index].features.some((feature) =>
             policy.expansionFeatures.includes(feature),
           ),
@@ -291,7 +301,11 @@ export default [
       });
       const nonbaselineOutsideClaimedFeatureArea = nonbaselinePaths.filter(
         (path, index) => {
-          if (h0PromotionPaths.has(path) || m1PromotionPaths.has(path)) {
+          if (
+            h0PromotionPaths.has(path) ||
+            m1PromotionPaths.has(path) ||
+            p1cPromotionPaths.has(path)
+          ) {
             return false;
           }
 
@@ -354,6 +368,26 @@ export default [
         'the exact M1 promotion must retain its complete-pass root count',
       );
       assertSame(
+        p1cPromotion.length,
+        1,
+        'the exact P1C promotion group must remain unique',
+      );
+      assertSame(
+        p1cPromotion[0]?.paths.length,
+        P1C_PROMOTION_ROOT_COUNT,
+        'the exact P1C promotion must retain all 81 roots',
+      );
+      assertSame(
+        p1cPromotionPaths.size,
+        P1C_PROMOTION_ROOT_COUNT,
+        'the exact P1C promotion paths must be unique',
+      );
+      assertSame(
+        [...p1cPromotionPaths].every((path) => currentPaths.has(path)),
+        true,
+        'the generated selection must contain every exact P1C path',
+      );
+      assertSame(
         issue25ExpansionPaths.length,
         ISSUE_25_EXPANSION_PATH_COUNT,
         'the generated selection must retain every pinned issue #25 expansion path',
@@ -363,8 +397,9 @@ export default [
         ISSUE_25_EXPANSION_PATH_COUNT +
           GENERATOR_ROOTS.length +
           H0_PROMOTION_ROOT_COUNT +
-          M1_PROMOTION_ROOT_COUNT,
-        'the generated total must consist of the pinned baseline, issue #25 expansion, layer-4 generator roots, H0 complete-pass roots, and M1 Reflect roots',
+          M1_PROMOTION_ROOT_COUNT +
+          P1C_PROMOTION_ROOT_COUNT,
+        'the generated total must include the exact P1C promotion',
       );
       assertSame(
         missing.length,

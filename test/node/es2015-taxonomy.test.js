@@ -2002,7 +2002,7 @@ export default [
     },
   },
   {
-    name: 'ES2015 audit reverses applied M1 before M0 for the historical H0 proof',
+    name: 'ES2015 audit reverses applied P1C, M1, then M0 for the historical H0 proof',
     run: async () => {
       const fixture = productionH0AuditReconciliationFixture();
       /** @type {string[]} */
@@ -2018,6 +2018,8 @@ export default [
       assertSame(
         JSON.stringify(evidenceReads),
         JSON.stringify([
+          'tools/test262/es2015-p1c-baseline.json',
+          'tools/test262/es2015-p1c-disposition.json',
           'tools/test262/es2015-m1-baseline.json',
           'tools/test262/es2015-m1-disposition.json',
           'tools/test262/es2015-m0-baseline.json',
@@ -2046,6 +2048,27 @@ export default [
         },
         readGitFile: readRepositoryGitFileAsync,
       });
+    },
+  },
+  {
+    name: 'ES2015 audit rejects applied P1C evidence that differs from its authority',
+    run: async () => {
+      const fixture = productionH0AuditReconciliationFixture();
+      const error = await rejected(() =>
+        validateDefaultH0AuditReconciliation({
+          ...fixture,
+          readFile: async (path) =>
+            path === 'tools/test262/es2015-p1c-baseline.json'
+              ? `${await fixture.readFile(path)} `
+              : fixture.readFile(path),
+          readGitFile: readRepositoryGitFileAsync,
+        }),
+      );
+      assertSame(error instanceof Es2015AuditError, true);
+      assertSame(
+        error.message,
+        'Applied P1C H0 reconciliation evidence does not match its authority',
+      );
     },
   },
   {
@@ -2985,6 +3008,88 @@ export default [
       assertSame(
         JSON.stringify(p1cClassification?.features),
         '["destructuring-binding"]',
+      );
+    },
+  },
+  {
+    name: 'checked-in P1C evidence is fully selected in the applied taxonomy and audit',
+    run: async () => {
+      const [
+        pathsText,
+        baselineText,
+        dispositionText,
+        ownerDeltasText,
+        ownerMapText,
+        promotionText,
+        taxonomyText,
+        auditEvidenceText,
+      ] = await Promise.all(
+        [
+          'tools/test262/es2015-p1c-paths.json',
+          'tools/test262/es2015-p1c-baseline.json',
+          'tools/test262/es2015-p1c-disposition.json',
+          'tools/test262/es2015-p1c-owner-deltas.json',
+          'tools/test262/es2015-p1c-owner-map.json',
+          'tools/test262/es2015-p1c-promotion.json',
+          'tools/test262/es2015-taxonomy.json',
+          'tools/test262/es2015-audit-evidence.json',
+        ].map((file) => readFile(path.join(REPOSITORY_ROOT, file), 'utf8')),
+      );
+      const paths = JSON.parse(pathsText);
+      const sourcePaths = new Set(paths);
+      const baseline = JSON.parse(baselineText);
+      const disposition = JSON.parse(dispositionText);
+      const ownerDeltas = JSON.parse(ownerDeltasText);
+      const ownerMap = JSON.parse(ownerMapText);
+      const promotion = JSON.parse(promotionText);
+      const taxonomy = JSON.parse(taxonomyText);
+      const audit = JSON.parse(auditEvidenceText);
+      const classifications = taxonomy.classifications.filter(
+        (/** @type {any} */ entry) => sourcePaths.has(entry.path),
+      );
+      const auditRecords = audit.auditRecords.filter(
+        (/** @type {any} */ record) => sourcePaths.has(record.file),
+      );
+
+      assertSame(paths.length, 81);
+      assertSame(baseline.length, 81);
+      assertSame(disposition.destinations.length, 81);
+      assertSame(ownerDeltas.length, 0);
+      assertSame(ownerMap.length, 0);
+      assertSame(promotion.version, 2);
+      assertSame(promotion.groupName, 'es2015/p1c-catch-binding');
+      assertSame(promotion.rootCount, 81);
+      assertSame(promotion.variantCount, 161);
+      assertSame(promotion.entries.length, 81);
+      assertSame(classifications.length, 81);
+      assertSame(
+        classifications.reduce(
+          (/** @type {number} */ total, /** @type {any} */ entry) =>
+            total + entry.variants,
+          0,
+        ),
+        161,
+      );
+      assertSame(
+        classifications.every(
+          (/** @type {any} */ entry) =>
+            entry.status === 'selected-passing' && entry.blocker === null,
+        ),
+        true,
+      );
+      assertSame(auditRecords.length, 161);
+      assertSame(
+        auditRecords.every(
+          (/** @type {any} */ record) => record.status === 'passed',
+        ),
+        true,
+      );
+      assertSame(
+        paths.every(
+          (/** @type {string} */ sourcePath) =>
+            !Object.prototype.hasOwnProperty.call(audit.blockers, sourcePath),
+        ),
+        true,
       );
     },
   },

@@ -1,5 +1,7 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile, rm, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { createNodeTest262Host } from '../../tools/test262/adapters/node.js';
 import { buildEs2015Inventory } from '../../tools/test262/es2015-taxonomy.js';
@@ -23,7 +25,29 @@ import {
 } from '../../tools/test262/upstream.js';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
+const REPOSITORY_ROOT_PATH = fileURLToPath(REPOSITORY_ROOT);
 const { structuredClone } = globalThis;
+const P1C_CONSUMER_BASE = 'edccfb8822339dab53c47bbb8c4ae5cc2db93b1b';
+const P1C_EVIDENCE_PATHS = Object.freeze([
+  'tools/test262/es2015-p1c-paths.json',
+  'tools/test262/es2015-p1c-baseline.json',
+  'tools/test262/es2015-p1c-disposition.json',
+  'tools/test262/es2015-p1c-owner-deltas.json',
+  'tools/test262/es2015-p1c-owner-map.json',
+  'tools/test262/es2015-p1c-promotion.json',
+]);
+const P1C_PROJECTED_OUTPUT_SHA256 = Object.freeze({
+  'docs/conformance.md':
+    'd59027686ed08e1e5c3a3cf3d523b2716d91991353810744dd2444f9d662fffd',
+  'docs/test262-report.jsonl':
+    'abcdf8240da7264fcccf3fcc4bada1f10c35eb02810aa3d87b6a67b13437a07a',
+  'tools/test262/es2015-audit-evidence.json':
+    '06817df31fa640d058ce19ac6b01e589e487313a7ec6572f3d888d5412ffd197',
+  'tools/test262/es2015-taxonomy.json':
+    '2db8bf5b5a6987362b77e539f57724f279570eb83f46641b158843996e6216d3',
+  'tools/test262/upstream-subset.json':
+    '2a8128d47e577341200c8571a74556899a44fdcd182d8e621e7798d404b4ca19',
+});
 const EXPECTED_FEATURE_PROFILE_COUNTS = Object.freeze({
   '[]': 2,
   '["Symbol.iterator","destructuring-binding"]': 8,
@@ -151,6 +175,99 @@ export default [
         assertThrows(() => verifyP1CLedger(ledgerText, foreignPath), Error)
           .message,
         `P1C BASE classification mismatch: ${paths[0]}`,
+      );
+    },
+  },
+  {
+    name: 'applied P1C execution reconstructs and validates the exact source taxonomy',
+    run: async () => {
+      const p1c = await loadP1C();
+      const reconstruct = p1c.reconstructAppliedP1CSourceTaxonomy;
+      assertSame(typeof reconstruct, 'function');
+      if (typeof reconstruct !== 'function') return;
+      const [
+        ledgerText,
+        taxonomyText,
+        baselineText,
+        dispositionText,
+        provenanceText,
+      ] = await Promise.all(
+        [
+          'tools/test262/es2015-p1c-paths.txt',
+          'tools/test262/es2015-taxonomy.json',
+          'tools/test262/es2015-p1c-baseline.json',
+          'tools/test262/es2015-p1c-disposition.json',
+          'tools/test262/es2015-provenance.json',
+        ].map((file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8')),
+      );
+      const options = {
+        taxonomyText,
+        baselineText,
+        dispositionText,
+        provenanceText,
+      };
+      const source = reconstruct(options);
+      assertSame(p1c.verifyP1CLedger(ledgerText, source).length, p1c.P1C.roots);
+      const sourceByPath = new Map(
+        source.classifications.map((/** @type {any} */ entry) => [
+          entry.path,
+          entry,
+        ]),
+      );
+      assertSame(
+        JSON.stringify(
+          JSON.parse(baselineText).map((/** @type {any} */ entry) =>
+            sourceByPath.get(entry.path),
+          ),
+        ),
+        JSON.stringify(JSON.parse(baselineText)),
+      );
+      assertSame(
+        assertThrows(
+          () => reconstruct({ ...options, baselineText: `${baselineText} ` }),
+          Error,
+        ).message,
+        'Focused P1C execution evidence does not match authority',
+      );
+
+      const disposition = JSON.parse(dispositionText);
+      const sourcePath = disposition.destinations[0].path;
+      const mismatched = JSON.parse(taxonomyText);
+      const mismatchedEntry = findClassification(mismatched, sourcePath);
+      mismatchedEntry.status =
+        mismatchedEntry.status === 'selected-passing'
+          ? 'blocked:early-errors-and-declaration-instantiation'
+          : 'selected-passing';
+      mismatchedEntry.blocker =
+        mismatchedEntry.status === 'selected-passing'
+          ? null
+          : 'early-errors-and-declaration-instantiation';
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              taxonomyText: renderP1CJson(mismatched),
+            }),
+          Error,
+        ).message,
+        `Focused P1C applied taxonomy mismatch: ${sourcePath}`,
+      );
+
+      const drifted = JSON.parse(taxonomyText);
+      findClassification(drifted, sourcePath).provenance.push(
+        'foreign-p1c-drift',
+      );
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              taxonomyText: renderP1CJson(drifted),
+            }),
+          Error,
+        ).message,
+        `Focused P1C applied taxonomy drift: ${sourcePath}`,
       );
     },
   },
@@ -841,7 +958,547 @@ export default [
     },
   },
   {
-    name: 'P1C build-scratch writes the exact authority bundle',
+    name: 'tracked P1C evidence reproduces the exact applied consumer projection',
+    run: async () => {
+      const {
+        P1C,
+        buildP1CAuthorityEvidence,
+        buildP1CPendingAuthority,
+        buildP1CReportArtifacts,
+        projectP1CCoreOutputs,
+      } = await loadP1C();
+      const [
+        ledgerText,
+        pathsText,
+        baselineText,
+        dispositionText,
+        ownerDeltasText,
+        ownerMapText,
+        promotionText,
+        taxonomyText,
+        auditEvidenceText,
+        subsetText,
+        reportText,
+        conformanceText,
+        featuresText,
+        selectionText,
+        provenanceText,
+      ] = await Promise.all(
+        [
+          'tools/test262/es2015-p1c-paths.txt',
+          ...P1C_EVIDENCE_PATHS,
+          'tools/test262/es2015-taxonomy.json',
+          'tools/test262/es2015-audit-evidence.json',
+          'tools/test262/upstream-subset.json',
+          'docs/test262-report.jsonl',
+          'docs/conformance.md',
+          'tools/test262/features.json',
+          'tools/test262/es5-selection.json',
+          'tools/test262/es2015-provenance.json',
+        ].map((file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8')),
+      );
+      const baseTaxonomyText = readP1CConsumerBaseText(
+        'tools/test262/es2015-taxonomy.json',
+      );
+      const baseAuditEvidenceText = readP1CConsumerBaseText(
+        'tools/test262/es2015-audit-evidence.json',
+      );
+      const baseSubsetText = readP1CConsumerBaseText(
+        'tools/test262/upstream-subset.json',
+      );
+      const baseReportText = readP1CConsumerBaseText(
+        'docs/test262-report.jsonl',
+      );
+      const baseConformanceText = readP1CConsumerBaseText(
+        'docs/conformance.md',
+      );
+      const baseSelectionText = readP1CConsumerBaseText(
+        'tools/test262/es5-selection.json',
+      );
+      const paths = JSON.parse(pathsText);
+      const sourcePaths = new Set(paths);
+      const evidence = {
+        paths,
+        baseline: JSON.parse(baselineText),
+        disposition: JSON.parse(dispositionText),
+        ownerDeltas: JSON.parse(ownerDeltasText),
+        ownerMap: JSON.parse(ownerMapText),
+        promotion: JSON.parse(promotionText),
+      };
+      const execution = {
+        version: 1,
+        ledger: P1C,
+        records: JSON.parse(auditEvidenceText).auditRecords.filter(
+          (/** @type {any} */ record) => sourcePaths.has(record.file),
+        ),
+      };
+      const inventory = syntheticP1CInventory(
+        ledgerText,
+        JSON.parse(baseTaxonomyText),
+      );
+      const rebuiltEvidence = buildP1CAuthorityEvidence({
+        ledgerText,
+        taxonomyText: baseTaxonomyText,
+        execution,
+        inventory,
+      });
+      const rebuiltEvidenceTexts = buildP1CEvidenceTexts(rebuiltEvidence);
+      for (const path of P1C_EVIDENCE_PATHS) {
+        assertSame(
+          /** @type {Record<string, string>} */ (rebuiltEvidenceTexts)[path],
+          await readFile(new URL(path, REPOSITORY_ROOT), 'utf8'),
+          path,
+        );
+      }
+      assertSame(ownerDeltasText, '[]\n');
+      assertSame(ownerMapText, '[]\n');
+
+      const projected = projectP1CCoreOutputs({
+        taxonomyText: baseTaxonomyText,
+        auditEvidenceText: baseAuditEvidenceText,
+        subsetText: baseSubsetText,
+        evidence,
+        execution,
+        inventory,
+      });
+      assertSame(projected.auditEvidenceText, auditEvidenceText);
+      assertSame(projected.subsetText, subsetText);
+      const artifacts = buildP1CReportArtifacts({
+        reportText: baseReportText,
+        conformanceText: baseConformanceText,
+        subsetText: projected.subsetText,
+        taxonomyText: projected.taxonomyText,
+        auditEvidenceText: projected.auditEvidenceText,
+        promotionText,
+        featuresText,
+      });
+      const projectedTaxonomyText = renderP1CJson({
+        ...JSON.parse(projected.taxonomyText),
+        inputs: {
+          ...JSON.parse(projected.taxonomyText).inputs,
+          subsetSha256: sha256(projected.subsetText),
+          selectedEvidenceSha256: sha256(artifacts.reportText),
+          auditEvidenceSha256: sha256(projected.auditEvidenceText),
+        },
+      });
+      assertSame(projectedTaxonomyText, taxonomyText);
+      assertSame(artifacts.reportText, reportText);
+      assertSame(artifacts.conformanceText, conformanceText);
+      assertSame(selectionText, baseSelectionText);
+
+      const pendingAuthority = buildP1CPendingAuthority({
+        baseTaxonomyText,
+        evidenceTexts: rebuiltEvidenceTexts,
+        baseOutputs: {
+          'docs/conformance.md': baseConformanceText,
+          'docs/test262-report.jsonl': baseReportText,
+          'tools/test262/es2015-audit-evidence.json': baseAuditEvidenceText,
+          'tools/test262/es2015-taxonomy.json': baseTaxonomyText,
+          'tools/test262/upstream-subset.json': baseSubsetText,
+        },
+        projectedOutputs: {
+          'docs/conformance.md': artifacts.conformanceText,
+          'docs/test262-report.jsonl': artifacts.reportText,
+          'tools/test262/es2015-audit-evidence.json':
+            projected.auditEvidenceText,
+          'tools/test262/es2015-taxonomy.json': projectedTaxonomyText,
+          'tools/test262/upstream-subset.json': projected.subsetText,
+        },
+      });
+      const trackedAuthority = JSON.parse(
+        provenanceText,
+      ).roadmapAuthorities.find(
+        (/** @type {any} */ entry) => entry.code === 'P1C',
+      );
+      if (trackedAuthority === undefined) {
+        throw new Error('missing tracked P1C roadmap authority');
+      }
+      const appliedAuthority = structuredClone(pendingAuthority);
+      appliedAuthority.state = 'applied';
+      assertSame(
+        JSON.stringify(trackedAuthority),
+        JSON.stringify(appliedAuthority),
+      );
+      assertSame(trackedAuthority.state, 'applied');
+      assertSame(
+        canonicalRoadmapAuthoritySha256(pendingAuthority),
+        '3281bd0001ac48ee6f31d21d12a8faade3652cd194360fcf21c3ffc1b9a3a193',
+      );
+      assertSame(
+        roadmapAggregateProjectionSha256(trackedAuthority),
+        '30354b59b9dea45a94b47ca5c1edf270c161e3230f04661e4ce6cfe8f9089b0b',
+      );
+      for (const [path, expected] of Object.entries(
+        P1C_PROJECTED_OUTPUT_SHA256,
+      )) {
+        assertSame(
+          sha256(await readFile(new URL(path, REPOSITORY_ROOT), 'utf8')),
+          expected,
+          path,
+        );
+      }
+    },
+  },
+  {
+    name: 'applied P1C moves only the exact live-base taxonomy and generated totals',
+    run: async () => {
+      const [pathsText, taxonomyText, subsetText, selectionText] =
+        await Promise.all(
+          [
+            'tools/test262/es2015-p1c-paths.json',
+            'tools/test262/es2015-taxonomy.json',
+            'tools/test262/upstream-subset.json',
+            'tools/test262/es5-selection.json',
+          ].map((file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8')),
+        );
+      const baseTaxonomyText = readP1CConsumerBaseText(
+        'tools/test262/es2015-taxonomy.json',
+      );
+      const baseSubsetText = readP1CConsumerBaseText(
+        'tools/test262/upstream-subset.json',
+      );
+      const baseSelectionText = readP1CConsumerBaseText(
+        'tools/test262/es5-selection.json',
+      );
+      const sourcePaths = new Set(JSON.parse(pathsText));
+      const baseTaxonomy = JSON.parse(baseTaxonomyText);
+      const headTaxonomy = JSON.parse(taxonomyText);
+      const baseByPath = new Map(
+        baseTaxonomy.classifications.map((/** @type {any} */ entry) => [
+          entry.path,
+          entry,
+        ]),
+      );
+      const headByPath = new Map(
+        headTaxonomy.classifications.map((/** @type {any} */ entry) => [
+          entry.path,
+          entry,
+        ]),
+      );
+
+      assertSame(
+        JSON.stringify(headTaxonomy.summary.partitions),
+        JSON.stringify(baseTaxonomy.summary.partitions),
+      );
+      assertSame(headTaxonomy.summary.roots, baseTaxonomy.summary.roots);
+      assertSame(headTaxonomy.summary.variants, baseTaxonomy.summary.variants);
+      assertSame(headByPath.size, baseByPath.size);
+      for (const [path, base] of baseByPath) {
+        const head = headByPath.get(path);
+        if (head === undefined) {
+          throw new Error(`P1C projection removed taxonomy path ${path}`);
+        }
+        if (!sourcePaths.has(path)) {
+          assertSame(JSON.stringify(head), JSON.stringify(base), path);
+          continue;
+        }
+        const stableBase = { ...base };
+        const stableHead = { ...head };
+        Reflect.deleteProperty(stableBase, 'status');
+        Reflect.deleteProperty(stableBase, 'blocker');
+        Reflect.deleteProperty(stableHead, 'status');
+        Reflect.deleteProperty(stableHead, 'blocker');
+        assertSame(
+          JSON.stringify(stableHead),
+          JSON.stringify(stableBase),
+          path,
+        );
+        assertSame(
+          base.status,
+          'blocked:early-errors-and-declaration-instantiation',
+          path,
+        );
+        assertSame(
+          base.blocker,
+          'early-errors-and-declaration-instantiation',
+          path,
+        );
+        assertSame(head.status, 'selected-passing', path);
+        assertSame(head.blocker, null, path);
+      }
+
+      const baseCore = statusRows(baseTaxonomy.statusTables.core);
+      const headCore = statusRows(headTaxonomy.statusTables.core);
+      for (const [name, base] of baseCore) {
+        const head = headCore.get(name);
+        if (head === undefined) throw new Error(`missing core status ${name}`);
+        if (name === 'selected-passing') {
+          assertSame(head.roots - base.roots, 81);
+          assertSame(head.variants - base.variants, 161);
+        } else if (
+          name === 'blocked:early-errors-and-declaration-instantiation'
+        ) {
+          assertSame(head.roots - base.roots, -81);
+          assertSame(head.variants - base.variants, -161);
+        } else {
+          assertSame(JSON.stringify(head), JSON.stringify(base), name);
+        }
+      }
+
+      const baseSubset = parseUpstreamSubset(baseSubsetText);
+      const headSubset = parseUpstreamSubset(subsetText);
+      const basePaths = upstreamSubsetPaths(baseSubset);
+      const headPaths = upstreamSubsetPaths(headSubset);
+      const p1cGroups = headSubset.groups.filter(
+        (group) => group.name === 'es2015/p1c-catch-binding',
+      );
+      const baseNonT0 = baseSubset.groups
+        .filter((group) => group.name !== 'es2015/audit-passing-promotion')
+        .flatMap((group) => group.paths);
+      const headNonT0 = headSubset.groups
+        .filter((group) => group.name !== 'es2015/audit-passing-promotion')
+        .flatMap((group) => group.paths);
+
+      assertSame(baseSubset.groups.length, 61);
+      assertSame(basePaths.length, 20595);
+      assertSame(selectedVariants(baseTaxonomy, basePaths), 39139);
+      assertSame(new Set(baseNonT0).size, 14272);
+      assertSame(headSubset.groups.length, 62);
+      assertSame(headPaths.length, 20676);
+      assertSame(selectedVariants(headTaxonomy, headPaths), 39300);
+      assertSame(new Set(headNonT0).size, 14353);
+      assertSame(headSubset.groups.length - baseSubset.groups.length, 1);
+      assertSame(headPaths.length - basePaths.length, 81);
+      assertSame(
+        selectedVariants(headTaxonomy, headPaths) -
+          selectedVariants(baseTaxonomy, basePaths),
+        161,
+      );
+      assertSame(new Set(headNonT0).size - new Set(baseNonT0).size, 81);
+      assertSame(p1cGroups.length, 1);
+      assertSame(
+        JSON.stringify(p1cGroups[0]?.paths),
+        JSON.stringify([...sourcePaths]),
+      );
+      assertSame(
+        JSON.stringify(
+          headSubset.groups.filter(
+            (group) => group.name !== 'es2015/p1c-catch-binding',
+          ),
+        ),
+        JSON.stringify(baseSubset.groups),
+      );
+      assertSame(
+        [...sourcePaths].every((path) => !basePaths.includes(path)),
+        true,
+      );
+      assertSame(
+        [...sourcePaths].every((path) => headPaths.includes(path)),
+        true,
+      );
+      assertSame(new Set(headNonT0).size, headNonT0.length);
+      assertSame(selectionText, baseSelectionText);
+    },
+  },
+  {
+    name: 'applied P1C report order and promotion metadata stay exact',
+    run: async () => {
+      const [
+        pathsText,
+        promotionText,
+        m1PromotionText,
+        subsetText,
+        reportText,
+      ] = await Promise.all(
+        [
+          'tools/test262/es2015-p1c-paths.json',
+          'tools/test262/es2015-p1c-promotion.json',
+          'tools/test262/es2015-m1-promotion.json',
+          'tools/test262/upstream-subset.json',
+          'docs/test262-report.jsonl',
+        ].map((file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8')),
+      );
+      const sourcePaths = new Set(JSON.parse(pathsText));
+      const promotion = parseEs2015Promotion(promotionText);
+      const m1Promotion = parseEs2015Promotion(m1PromotionText);
+      const selectedPaths = upstreamSubsetPaths(
+        parseUpstreamSubset(subsetText),
+      );
+      const reportRecords = reportText
+        .trimEnd()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+        .filter((record) => record.type === 'test');
+      const reportPathOrder = [];
+      for (const record of reportRecords) {
+        if (reportPathOrder[reportPathOrder.length - 1] !== record.file) {
+          reportPathOrder.push(record.file);
+        }
+      }
+      assertSame(
+        JSON.stringify(reportPathOrder),
+        JSON.stringify(selectedPaths),
+      );
+      const p1cByPath = new Map(
+        promotion.entries.map((entry) => [entry.path, entry]),
+      );
+      const p1cReportRecords = reportRecords.filter((record) =>
+        sourcePaths.has(record.file),
+      );
+      assertSame(p1cReportRecords.length, 161);
+      for (const entry of promotion.entries) {
+        const records = p1cReportRecords.filter(
+          (record) => record.file === entry.path,
+        );
+        assertSame(
+          JSON.stringify(records.map((record) => record.variant)),
+          JSON.stringify(
+            entry.variants === 1 ? ['non-strict'] : ['non-strict', 'strict'],
+          ),
+          entry.path,
+        );
+        assertSame(
+          records.every(
+            (record) =>
+              record.status === 'passed' &&
+              JSON.stringify(record.features ?? []) ===
+                JSON.stringify(p1cByPath.get(record.file)?.features),
+          ),
+          true,
+          entry.path,
+        );
+      }
+
+      const baseReportRecords = readP1CConsumerBaseText(
+        'docs/test262-report.jsonl',
+      )
+        .trimEnd()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+        .filter((record) => record.type === 'test');
+      const m1Paths = new Set(m1Promotion.entries.map((entry) => entry.path));
+      assertSame(
+        JSON.stringify(
+          reportRecords.filter((record) => m1Paths.has(record.file)),
+        ),
+        JSON.stringify(
+          baseReportRecords.filter((record) => m1Paths.has(record.file)),
+        ),
+      );
+    },
+  },
+  {
+    name: 'P1C consumer projection rejects evidence and promotion-order drift',
+    run: async () => {
+      const { P1C, projectP1CCoreOutputs } = await loadP1C();
+      const [
+        ledgerText,
+        pathsText,
+        baselineText,
+        dispositionText,
+        ownerDeltasText,
+        ownerMapText,
+        promotionText,
+        auditEvidenceText,
+      ] = await Promise.all(
+        [
+          'tools/test262/es2015-p1c-paths.txt',
+          ...P1C_EVIDENCE_PATHS,
+          'tools/test262/es2015-audit-evidence.json',
+        ].map((file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8')),
+      );
+      const baseTaxonomyText = readP1CConsumerBaseText(
+        'tools/test262/es2015-taxonomy.json',
+      );
+      const sourcePaths = new Set(JSON.parse(pathsText));
+      const exactEvidence = {
+        paths: JSON.parse(pathsText),
+        baseline: JSON.parse(baselineText),
+        disposition: JSON.parse(dispositionText),
+        ownerDeltas: JSON.parse(ownerDeltasText),
+        ownerMap: JSON.parse(ownerMapText),
+        promotion: JSON.parse(promotionText),
+      };
+      const execution = {
+        version: 1,
+        ledger: P1C,
+        records: JSON.parse(auditEvidenceText).auditRecords.filter(
+          (/** @type {any} */ record) => sourcePaths.has(record.file),
+        ),
+      };
+      const inventory = syntheticP1CInventory(
+        ledgerText,
+        JSON.parse(baseTaxonomyText),
+      );
+      /** @param {(evidence: any) => void} mutate */
+      const expectEvidenceRejected = (mutate) => {
+        const evidence = structuredClone(exactEvidence);
+        mutate(evidence);
+        return assertThrows(
+          () =>
+            projectP1CCoreOutputs({
+              taxonomyText: baseTaxonomyText,
+              auditEvidenceText: readP1CConsumerBaseText(
+                'tools/test262/es2015-audit-evidence.json',
+              ),
+              subsetText: readP1CConsumerBaseText(
+                'tools/test262/upstream-subset.json',
+              ),
+              evidence,
+              execution,
+              inventory,
+            }),
+          Error,
+        );
+      };
+      const featureEntry = exactEvidence.promotion.entries.find(
+        (/** @type {any} */ entry) => entry.features.length > 1,
+      );
+      if (featureEntry === undefined) {
+        throw new Error('missing multi-feature P1C promotion entry');
+      }
+      const featurePath = featureEntry.path;
+      assertSame(
+        expectEvidenceRejected((evidence) => {
+          evidence.promotion.entries
+            .find((/** @type {any} */ entry) => entry.path === featurePath)
+            .features.reverse();
+        }).message,
+        'P1C projection requires exact authority evidence',
+      );
+      assertSame(
+        expectEvidenceRejected((evidence) => {
+          evidence.promotion.entries[0].includeFeatures = ['z', 'a'];
+        }).message,
+        'P1C projection requires exact authority evidence',
+      );
+      assertSame(
+        expectEvidenceRejected((evidence) => {
+          evidence.paths.pop();
+        }).message.includes('reviewed 81-root'),
+        true,
+      );
+      assertSame(
+        expectEvidenceRejected((evidence) => {
+          evidence.paths[0] = 'test/language/statements/try/foreign.js';
+        }).message.includes('P1C ledger'),
+        true,
+      );
+      assertSame(
+        expectEvidenceRejected((evidence) => {
+          evidence.ownerDeltas.push({
+            path: exactEvidence.paths[0],
+            status: 'blocked',
+            blocker: 'early-errors-and-declaration-instantiation',
+            issue: 116,
+          });
+        }).message,
+        'P1C projection requires exact authority evidence',
+      );
+      assertSame(
+        expectEvidenceRejected((evidence) => {
+          evidence.ownerMap.push({
+            status: 'blocked',
+            blocker: 'early-errors-and-declaration-instantiation',
+            issue: 116,
+          });
+        }).message,
+        'P1C projection requires exact authority evidence',
+      );
+    },
+  },
+  {
+    name: 'P1C build-scratch does not reuse applied outputs as a new authority base',
     run: async () => {
       const { main } = await loadP1C();
       const inputs = await readP1CProjectionInputs();
@@ -853,7 +1510,7 @@ export default [
       const outputUrl = new URL(outputPath, REPOSITORY_ROOT);
       const executionUrl = new URL(executionPath, REPOSITORY_ROOT);
       const sourceByPath = syntheticP1CSources(inputs.ledgerText, taxonomy);
-      const status = await (async () => {
+      const message = await (async () => {
         await rm(outputUrl, { recursive: true, force: true });
         await rm(executionUrl, { force: true });
         await writeFile(
@@ -862,39 +1519,49 @@ export default [
           'utf8',
         );
         try {
-          return await main(
-            [
-              '--build-scratch',
-              '--ledger=tools/test262/es2015-p1c-paths.txt',
-              `--execution=${executionPath}`,
-              `--output=${outputPath}`,
-            ],
-            {
-              environment: { TZ: 'UTC' },
-              readPin: async () => ({
-                repository: taxonomy.pin.repository,
-                revision: taxonomy.pin.revision,
-                checkoutPath: 'vendor/test262',
-              }),
-              assertPinnedCheckout: async () => {},
-              readRoot: async (sourcePath) => {
-                const source = sourceByPath.get(sourcePath);
-                if (source === undefined) {
-                  throw new Error(`missing synthetic P1C source ${sourcePath}`);
-                }
-                return source;
+          try {
+            await main(
+              [
+                '--build-scratch',
+                '--ledger=tools/test262/es2015-p1c-paths.txt',
+                `--execution=${executionPath}`,
+                `--output=${outputPath}`,
+              ],
+              {
+                environment: { TZ: 'UTC' },
+                readPin: async () => ({
+                  repository: taxonomy.pin.repository,
+                  revision: taxonomy.pin.revision,
+                  checkoutPath: 'vendor/test262',
+                }),
+                assertPinnedCheckout: async () => {},
+                readRoot: async (sourcePath) => {
+                  const source = sourceByPath.get(sourcePath);
+                  if (source === undefined) {
+                    throw new Error(
+                      `missing synthetic P1C source ${sourcePath}`,
+                    );
+                  }
+                  return source;
+                },
+                readIncludeDefinitions: async () =>
+                  syntheticP1CIncludeDefinitions(),
               },
-              readIncludeDefinitions: async () =>
-                syntheticP1CIncludeDefinitions(),
-            },
-          );
+            );
+          } catch (error) {
+            return error instanceof Error ? error.message : String(error);
+          }
+          return '';
         } finally {
           await rm(outputUrl, { recursive: true, force: true });
           await rm(executionUrl, { force: true });
         }
       })();
 
-      assertSame(status, 0);
+      assertSame(
+        message,
+        'P1C BASE classification mismatch: test/language/statements/try/dstr/ary-init-iter-close.js',
+      );
     },
   },
 ];
@@ -903,26 +1570,49 @@ async function loadP1C() {
   return import('../../tools/test262/es2015-p1c.js');
 }
 
+/** @param {string} path */
+function readP1CConsumerBaseText(path) {
+  return execFileSync(
+    'git',
+    ['-c', 'core.pager=cat', 'show', `${P1C_CONSUMER_BASE}:${path}`],
+    /** @type {any} */ ({
+      cwd: REPOSITORY_ROOT_PATH,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+    }),
+  );
+}
+
+/** @param {readonly { name: string, roots: number, variants: number }[]} rows */
+function statusRows(rows) {
+  return new Map(rows.map((entry) => [entry.name, entry]));
+}
+
+/**
+ * @param {{ classifications: readonly { path: string, variants: number }[] }} taxonomy
+ * @param {readonly string[]} paths
+ */
+function selectedVariants(taxonomy, paths) {
+  const selected = new Set(paths);
+  return taxonomy.classifications
+    .filter((entry) => selected.has(entry.path))
+    .reduce((total, entry) => total + entry.variants, 0);
+}
+
 async function readP1CInputs() {
-  const [ledgerText, taxonomyText, selectionText, subsetText] =
-    await Promise.all([
-      readFile(
-        new URL('tools/test262/es2015-p1c-paths.txt', REPOSITORY_ROOT),
-        'utf8',
-      ),
-      readFile(
-        new URL('tools/test262/es2015-taxonomy.json', REPOSITORY_ROOT),
-        'utf8',
-      ),
-      readFile(
-        new URL('tools/test262/es5-selection.json', REPOSITORY_ROOT),
-        'utf8',
-      ),
-      readFile(
-        new URL('tools/test262/upstream-subset.json', REPOSITORY_ROOT),
-        'utf8',
-      ),
-    ]);
+  const ledgerText = await readFile(
+    new URL('tools/test262/es2015-p1c-paths.txt', REPOSITORY_ROOT),
+    'utf8',
+  );
+  const taxonomyText = readP1CConsumerBaseText(
+    'tools/test262/es2015-taxonomy.json',
+  );
+  const selectionText = readP1CConsumerBaseText(
+    'tools/test262/es5-selection.json',
+  );
+  const subsetText = readP1CConsumerBaseText(
+    'tools/test262/upstream-subset.json',
+  );
   return {
     ledgerText,
     taxonomy: JSON.parse(taxonomyText),
@@ -932,25 +1622,22 @@ async function readP1CInputs() {
 }
 
 async function readP1CProjectionInputs() {
-  const [
-    ledgerText,
-    taxonomyText,
-    auditEvidenceText,
-    subsetText,
-    reportText,
-    conformanceText,
-    featuresText,
-  ] = await Promise.all(
-    [
-      'tools/test262/es2015-p1c-paths.txt',
-      'tools/test262/es2015-taxonomy.json',
-      'tools/test262/es2015-audit-evidence.json',
-      'tools/test262/upstream-subset.json',
-      'docs/test262-report.jsonl',
-      'docs/conformance.md',
-      'tools/test262/features.json',
-    ].map((file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8')),
+  const [ledgerText, featuresText] = await Promise.all(
+    ['tools/test262/es2015-p1c-paths.txt', 'tools/test262/features.json'].map(
+      (file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8'),
+    ),
   );
+  const taxonomyText = readP1CConsumerBaseText(
+    'tools/test262/es2015-taxonomy.json',
+  );
+  const auditEvidenceText = readP1CConsumerBaseText(
+    'tools/test262/es2015-audit-evidence.json',
+  );
+  const subsetText = readP1CConsumerBaseText(
+    'tools/test262/upstream-subset.json',
+  );
+  const reportText = readP1CConsumerBaseText('docs/test262-report.jsonl');
+  const conformanceText = readP1CConsumerBaseText('docs/conformance.md');
   return {
     ledgerText,
     ledgerSha256: sha256(ledgerText),
