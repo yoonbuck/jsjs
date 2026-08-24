@@ -1,5 +1,6 @@
 import { assertSame } from './harness/assert.js';
 import { createAgent } from '../src/runtime/agent.js';
+import { EngineObject } from '../src/runtime/object.js';
 import { createRealm } from '../src/runtime/realm.js';
 import { evaluateScript } from '../src/api.js';
 
@@ -224,7 +225,7 @@ const tests = [
 
       const completion = evaluateScript(
         consumer,
-        'var result; try { throw payload; } catch ([entry]) { result = entry; } result;',
+        'var result; try { throw payload; } catch ([value]) { result = value; } result;',
       );
       assertSame(completion.type, 'normal');
       assertSame(completion.value, 17);
@@ -233,16 +234,30 @@ const tests = [
   {
     name: 'catch binding errors belong to the evaluating Realm',
     run() {
-      assertSame(
-        value(`
+      const realm = createRealm();
+      const completion = evaluateScript(
+        realm,
+        `
+          var caught;
           try {
             try { throw null; }
             catch ({ value }) {}
           } catch (error) {
-            error instanceof TypeError;
+            caught = error;
           }
-        `),
-        true,
+          caught;
+        `,
+      );
+      assertSame(completion.type, 'normal');
+      const error = /** @type {EngineObject} */ (completion.value);
+      assertSame(error instanceof EngineObject, true);
+      assertSame(
+        error.getPrototypeOf(),
+        /** @type {EngineObject} */ (
+          /** @type {any} */ (realm.globalObject.get('TypeError')).get(
+            'prototype',
+          )
+        ),
       );
     },
   },
@@ -270,11 +285,11 @@ const tests = [
     },
   },
   {
-    name: 'synchronous and generator catch binding initialization report the same Realm-owned abrupt completion',
+    name: 'generator catch binding initialization reports the same Realm-owned abrupt completion',
     run() {
       assertSame(
         value(`
-          function syncProbe() {
+          function* probe() {
             try {
               try { throw null; }
               catch ({ value }) {}
@@ -282,17 +297,9 @@ const tests = [
               return error instanceof TypeError;
             }
           }
-          function* generatorProbe() {
-            try {
-              try { throw null; }
-              catch ({ value }) {}
-            } catch (error) {
-              return error instanceof TypeError;
-            }
-          }
-          syncProbe() + ':' + generatorProbe().next().value;
+          probe().next().value;
         `),
-        'true:true',
+        true,
       );
     },
   },
