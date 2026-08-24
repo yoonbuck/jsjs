@@ -48,6 +48,7 @@ import moduleTest262 from './module-test262.test.js';
 import es5Selection from './es5-selection.test.js';
 import errors from './errors.test.js';
 import tryStatements from './try-statements.test.js';
+import catchBinding from './catch-binding.test.js';
 import switchLabels from './switch-labels.test.js';
 import lexicalDeclarations from './lexical-declarations.test.js';
 import stackOverflow from './stack-overflow.test.js';
@@ -209,6 +210,10 @@ export const PORTABLE_SUITES = Object.freeze([
   Object.freeze({
     file: 'test/try-statements.test.js',
     tests: tryStatements,
+  }),
+  Object.freeze({
+    file: 'test/catch-binding.test.js',
+    tests: catchBinding,
   }),
   Object.freeze({
     file: 'test/switch-labels.test.js',
