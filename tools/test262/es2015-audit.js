@@ -53,7 +53,13 @@ import {
   supportedFeaturesForPromotedPath,
   validateEs2015Promotion,
 } from './es2015-promotion.js';
-import { ES2015_M1_PROMOTION_FILE } from './es2015-roadmap-promotions.js';
+import {
+  ES2015_M1_PROMOTION_FILE,
+  ES2015_P1C_DISPOSITION_FILE,
+  ES2015_P1C_PROMOTION_FILE,
+  ES2015_ROADMAP_PROMOTION_FILES,
+  readOptionalRoadmapFile,
+} from './es2015-roadmap-promotions.js';
 import {
   COVERAGE_DOCUMENT_FILE,
   collectTest262Inventory,
@@ -94,6 +100,7 @@ const FEATURES_FILE = 'tools/test262/features.json';
 const REPORT_FILE = 'docs/test262-report.jsonl';
 const PROMOTION_GROUP = 'es2015/audit-passing-promotion';
 const M1_PROMOTION_GROUP = 'es2015/m1-reflect';
+const P1C_PROMOTION_GROUP = 'es2015/p1c-catch-binding';
 const PROVENANCE_DECISIONS_DIRECTORY =
   'tools/test262/es2015-provenance-decisions';
 const ES2015_H0_PATHS_FILE = 'tools/test262/es2015-h0-paths.json';
@@ -202,10 +209,31 @@ export async function main(argv = [], dependencies = {}) {
     deps.readProvenanceManifest(),
     deps.readDecisionFragments(),
   ]);
-  const [promotionText, m1PromotionText] = await Promise.all([
+  const [promotionText, roadmapPromotionEntries] = await Promise.all([
     readOptionalPromotion(deps, ES2015_PROMOTION_FILE),
-    readOptionalPromotion(deps, ES2015_M1_PROMOTION_FILE),
+    Promise.all(
+      ES2015_ROADMAP_PROMOTION_FILES.map(async (promotionFile) => [
+        promotionFile,
+        await readOptionalRoadmapFile(promotionFile, deps.readFile),
+      ]),
+    ),
   ]);
+  const roadmapPromotionTexts = new Map(
+    roadmapPromotionEntries
+      .filter((entry) => entry[1] !== null)
+      .map(
+        ([promotionFile, promotionText]) =>
+          /** @type {[string, string]} */ ([promotionFile, promotionText]),
+      ),
+  );
+  const m1PromotionText =
+    roadmapPromotionTexts.get(ES2015_M1_PROMOTION_FILE) ?? null;
+  const p1cPromotionText =
+    roadmapPromotionTexts.get(ES2015_P1C_PROMOTION_FILE) ?? null;
+  const p1cDispositionText = await readOptionalRoadmapFile(
+    ES2015_P1C_DISPOSITION_FILE,
+    deps.readFile,
+  );
   const policy = parseEs2015Policy(policyText);
   const anchors = parseEs2015Anchors(anchorsText);
   const provenanceManifest = parseEs2015ProvenanceManifest(
@@ -229,6 +257,12 @@ export async function main(argv = [], dependencies = {}) {
     subset,
     M1_PROMOTION_GROUP,
     ES2015_M1_PROMOTION_FILE,
+  );
+  const p1cPromotion = parsePromotion(
+    p1cPromotionText,
+    subset,
+    P1C_PROMOTION_GROUP,
+    ES2015_P1C_PROMOTION_FILE,
   );
   const regeneratingH0Disposition = options.writeDisposition !== null;
   const regeneratingH0Promotion =
@@ -326,11 +360,11 @@ export async function main(argv = [], dependencies = {}) {
       h0DispositionText,
     );
   }
-  const t0PromotionPathSet = new Set(
-    promotion === null ? [] : promotionPaths(promotion),
+  const standardPromotions = [promotion, m1Promotion, p1cPromotion].filter(
+    (candidate) => candidate !== null,
   );
-  const m1PromotionPathSet = new Set(
-    m1Promotion === null ? [] : promotionPaths(m1Promotion),
+  const standardPromotionPathSet = new Set(
+    standardPromotions.flatMap((candidate) => promotionPaths(candidate)),
   );
   const h0PromotionPathSet = new Set(
     h0Promotion === null ? [] : promotionPaths(h0Promotion),
@@ -345,11 +379,10 @@ export async function main(argv = [], dependencies = {}) {
   const h0ReassignedBlockers =
     h0Disposition === null ? {} : h0BlockersFromDisposition(h0Disposition);
   const promotionPathSet = new Set([
-    ...t0PromotionPathSet,
-    ...m1PromotionPathSet,
+    ...standardPromotionPathSet,
     ...h0PromotionPathSet,
   ]);
-  assertDisjointPromotionPaths([promotion, h0Promotion, m1Promotion]);
+  assertDisjointPromotionPaths([...standardPromotions, h0Promotion]);
 
   const roots = sortStrings(await deps.listRoots()).filter(
     (path) =>
@@ -383,20 +416,15 @@ export async function main(argv = [], dependencies = {}) {
       ([path]) => !h0DispositionPaths.has(path),
     ),
   );
-  if (promotion !== null) {
-    validateEs2015Promotion(promotion, {
+  for (const standardPromotion of standardPromotions) {
+    const standardPromotionPaths = new Set(promotionPaths(standardPromotion));
+    validateEs2015Promotion(standardPromotion, {
       pin,
       policy,
       selectedPaths,
-      inventory: inventory.filter((root) => t0PromotionPathSet.has(root.path)),
-    });
-  }
-  if (m1Promotion !== null) {
-    validateEs2015Promotion(m1Promotion, {
-      pin,
-      policy,
-      selectedPaths,
-      inventory: inventory.filter((root) => m1PromotionPathSet.has(root.path)),
+      inventory: inventory.filter((root) =>
+        standardPromotionPaths.has(root.path),
+      ),
     });
   }
   if (h0Promotion !== null) {
@@ -451,9 +479,7 @@ export async function main(argv = [], dependencies = {}) {
       check: options.check,
       subset,
       features,
-      standardPromotions: [promotion, m1Promotion].filter(
-        (candidate) => candidate !== null,
-      ),
+      standardPromotions,
       h0Promotion,
       h0DispositionRecords,
       inventory,
@@ -469,10 +495,8 @@ export async function main(argv = [], dependencies = {}) {
           selectedPaths.includes(record.file) &&
           !promotionPathSet.has(record.file),
       ),
-      ...evidence.records.filter(
-        (record) =>
-          t0PromotionPathSet.has(record.file) ||
-          m1PromotionPathSet.has(record.file),
+      ...evidence.records.filter((record) =>
+        standardPromotionPathSet.has(record.file),
       ),
       ...h0DispositionRecords.filter((record) =>
         h0PromotionPathSet.has(record.file),
@@ -484,8 +508,7 @@ export async function main(argv = [], dependencies = {}) {
     [
       ...evidence.records.filter(
         (record) =>
-          !t0PromotionPathSet.has(record.file) &&
-          !m1PromotionPathSet.has(record.file) &&
+          !standardPromotionPathSet.has(record.file) &&
           !h0DispositionPaths.has(record.file),
       ),
       ...h0DispositionRecords.filter(
@@ -518,6 +541,8 @@ export async function main(argv = [], dependencies = {}) {
     reportText,
     auditEvidenceText,
     promotionText,
+    p1cDispositionText,
+    p1cPromotionText,
     m1PromotionText,
     h0DispositionText,
     h0PromotionText,
@@ -2740,6 +2765,8 @@ function recordsByPath(records, name) {
  *   subsetText: string, featuresText: string, reportText: string,
  *   auditEvidenceText: string,
  *   promotionText: string | null,
+ *   p1cDispositionText?: string | null,
+ *   p1cPromotionText?: string | null,
  *   m1PromotionText?: string | null,
  *   h0DispositionText?: string | null,
  *   h0PromotionText?: string | null,
@@ -2773,6 +2800,12 @@ function buildArtifact(options) {
       ...(options.promotionText === null
         ? {}
         : { promotionSha256: sha256(options.promotionText) }),
+      ...(options.p1cDispositionText == null
+        ? {}
+        : { p1cDispositionSha256: sha256(options.p1cDispositionText) }),
+      ...(options.p1cPromotionText == null
+        ? {}
+        : { p1cPromotionSha256: sha256(options.p1cPromotionText) }),
       ...(options.h0DispositionText == null
         ? {}
         : { h0DispositionSha256: sha256(options.h0DispositionText) }),

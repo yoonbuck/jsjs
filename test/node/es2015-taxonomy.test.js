@@ -354,6 +354,65 @@ const AUDIT_M1_SUBSET = JSON.stringify({
     },
   ],
 });
+const AUDIT_P1C_PATH = 'test/language/statements/try/p1c.js';
+const AUDIT_P1C_RECORDS = Object.freeze([
+  {
+    type: 'test',
+    file: AUDIT_P1C_PATH,
+    variant: 'non-strict',
+    status: 'passed',
+  },
+  {
+    type: 'test',
+    file: AUDIT_P1C_PATH,
+    variant: 'strict',
+    status: 'passed',
+  },
+]);
+const AUDIT_P1C_DISPOSITION = JSON.stringify({
+  version: 1,
+  destinations: [{ path: AUDIT_P1C_PATH, status: 'selected-passing' }],
+});
+const AUDIT_P1C_PROMOTION = JSON.stringify({
+  groupName: 'es2015/p1c-catch-binding',
+  version: 2,
+  repository: AUDIT_PIN.repository,
+  revision: AUDIT_PIN.revision,
+  sourceTaxonomySha256: '3'.repeat(64),
+  ledgerSha256: sha256(`${AUDIT_P1C_PATH}\n`),
+  rootCount: 1,
+  variantCount: 2,
+  entries: [
+    {
+      path: AUDIT_P1C_PATH,
+      variants: 2,
+      features: ['destructuring-binding'],
+      includeFeatures: ['p1c-include-feature'],
+    },
+  ],
+});
+const AUDIT_P1C_SUBSET = JSON.stringify({
+  version: 1,
+  repository: AUDIT_PIN.repository,
+  revision: AUDIT_PIN.revision,
+  groups: [
+    {
+      name: 'es2015/audit-passing-promotion',
+      summary: 'An exact reviewed promotion fixture root.',
+      paths: [AUDIT_PROMOTION_PATH],
+    },
+    {
+      name: 'es2015/p1c-catch-binding',
+      summary: 'An exact P1C promotion fixture root.',
+      paths: [AUDIT_P1C_PATH],
+    },
+    {
+      name: 'fixture',
+      summary: 'A selected fixture root.',
+      paths: ['test/language/selected.js'],
+    },
+  ],
+});
 const H0_AUDIT_PASSED_PATH = 'test/language/h0-passed.js';
 const H0_AUDIT_REASSIGNED_PATH = 'test/built-ins/Proxy/h0-failed.js';
 const H0_AUDIT_PATHS = Object.freeze([
@@ -1200,6 +1259,17 @@ export default [
 
       const report = /** @type {any} */ (JSON.parse(output));
       assertSame('evidence' in report, false);
+      assertSame(
+        JSON.stringify(Object.keys(report.inputs)),
+        JSON.stringify([
+          'policySha256',
+          'anchorsSha256',
+          'subsetSha256',
+          'featuresSha256',
+          'selectedEvidenceSha256',
+          'auditEvidenceSha256',
+        ]),
+      );
       assertSame(report.inputs.auditEvidenceSha256, sha256(AUDIT_EVIDENCE));
       assertSame(report.summary.roots, 2);
       assertSame(report.summary.variants, 4);
@@ -2859,6 +2929,62 @@ export default [
           )?.features,
         ),
         '["m1-a-feature","m1-z-feature"]',
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit composes optional P1C promotion inputs from exact audit evidence',
+    run: async () => {
+      const roots = new Map(AUDIT_ROOTS);
+      roots.set(
+        AUDIT_P1C_PATH,
+        '/*---\ndescription: P1C promotion fixture.\nes6id: 13.15\nfeatures: [destructuring-binding]\nincludes: [p1cHelper.js]\n---*/\n',
+      );
+      const dependencies = auditDependencies({
+        roots,
+        subset: AUDIT_P1C_SUBSET,
+        promotion: AUDIT_PROMOTION,
+        auditEvidence: auditEvidence({
+          auditRecords: [...AUDIT_RECORDS, ...AUDIT_P1C_RECORDS],
+        }),
+        includeDefinitions: new Map([
+          ['p1cHelper.js', { features: ['p1c-include-feature'], includes: [] }],
+        ]),
+        files: new Map([
+          [
+            'tools/test262/es2015-policy.json',
+            JSON.stringify({
+              ...JSON.parse(POLICY),
+              es2015Features: ['destructuring-binding', 'let'],
+              neutralFeatures: ['cross-realm', 'p1c-include-feature'],
+            }),
+          ],
+          ['tools/test262/es2015-p1c-promotion.json', AUDIT_P1C_PROMOTION],
+          ['tools/test262/es2015-p1c-disposition.json', AUDIT_P1C_DISPOSITION],
+        ]),
+      });
+
+      assertSame(await auditEs2015Taxonomy([], dependencies), 0);
+      const artifact = JSON.parse(fixtureOutput(dependencies, AUDIT_PATH));
+      const p1cClassification = artifact.classifications.find(
+        (/** @type {any} */ entry) => entry.path === AUDIT_P1C_PATH,
+      );
+
+      assertSame(artifact.summary.roots, 3);
+      assertSame(artifact.summary.variants, 6);
+      assertSame(
+        artifact.inputs.p1cDispositionSha256,
+        sha256(AUDIT_P1C_DISPOSITION),
+      );
+      assertSame(
+        artifact.inputs.p1cPromotionSha256,
+        sha256(AUDIT_P1C_PROMOTION),
+      );
+      assertSame(artifact.inputs.promotionSha256, sha256(AUDIT_PROMOTION));
+      assertSame(p1cClassification?.status, 'selected-passing');
+      assertSame(
+        JSON.stringify(p1cClassification?.features),
+        '["destructuring-binding"]',
       );
     },
   },
