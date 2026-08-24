@@ -10,7 +10,7 @@ Done.
 
 ## Head
 
-`7e5d628caa22b021a00c0914dda22e05aabca423`
+`6fb6be0f2c0c94bc0a5b942c818c0ab2157a423b`
 
 ## Files
 
@@ -89,9 +89,55 @@ formatting the file.
 - `task1-verify4`: focused P1C ledger test, ESLint, Prettier, and diff checks
   all passed.
 
+## Fix Round 2
+
+- Replaced the runtime-only validator with a typed return path so checkJs can
+  narrow the caller after validation.
+- Added explicit JSDoc typedefs for the taxonomy object and classifications so
+  the `Map` entry is strongly typed.
+- Kept the runtime schema checks and negative tests unchanged in behavior.
+- The Task 3 report concern about missing caller narrowing was valid until this
+  fix landed.
+
+### RED
+
+```sh
+cd /home/jordan/jsjs/.worktrees/issue78-decomposition && npm run typecheck
+```
+
+This failed with:
+
+```txt
+test/node/es2015-p1c-ledger.test.js(23,39): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+test/node/es2015-p1c-ledger.test.js(135,31): error TS2339: Property 'classifications' does not exist on type 'object'.
+test/node/es2015-p1c-ledger.test.js(140,40): error TS2339: Property 'classifications' does not exist on type 'object'.
+test/node/es2015-p1c-ledger.test.js(141,28): error TS2339: Property 'classifications' does not exist on type 'object'.
+```
+
+### GREEN
+
+```sh
+TZ=UTC node test/run-node.js test/node/es2015-p1c-ledger.test.js
+npm run typecheck
+./node_modules/.bin/eslint test/node/es2015-p1c-ledger.test.js test/run-node.js
+./node_modules/.bin/prettier --check test/node/es2015-p1c-ledger.test.js test/run-node.js
+git diff --check
+```
+
+All checks passed after binding the validator return and tightening the JSDoc
+types.
+
+### Logs
+
+- `task1-typecheck-red`: repository checkJs failed with the caller-narrowing
+  errors above.
+- `task1-typecheck3`: typecheck passed after the typed return path was added.
+- `task1-verify-typefix2`: focused ledger test, typecheck, ESLint, Prettier,
+  and diff check all passed.
+
 ## Commit
 
-`7e5d628caa22b021a00c0914dda22e05aabca423` — `test262: harden P1C ledger validation`
+`6fb6be0f2c0c94bc0a5b942c818c0ab2157a423b` — `test262: tighten P1C ledger typing`
 
 ## Self-review
 
