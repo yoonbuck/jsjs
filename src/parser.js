@@ -4444,6 +4444,10 @@ function patternContextForChild(parent, key, inherited) {
     return 'binding';
   }
 
+  if (parent.type === 'CatchClause' && key === 'param') {
+    return 'binding';
+  }
+
   if (
     (parent.type === 'ImportDefaultSpecifier' ||
       parent.type === 'ImportNamespaceSpecifier' ||
@@ -4756,8 +4760,10 @@ function unsupportedEs2015Message(
       isFunctionNode(parent) &&
       parentKey === 'params' &&
       parentIndex === parent.params.length - 1;
+    const validArgument =
+      isUnknownAstNode(node.argument) || isIdentifierNode(node.argument);
 
-    return validArrayRest || validParameterRest
+    return (validArrayRest || validParameterRest) && validArgument
       ? undefined
       : 'rest elements are not supported in this context';
   }
@@ -5329,6 +5335,8 @@ function isSupportedExpressionPosition(
       case 'FunctionExpression':
       case 'ArrowFunctionExpression':
         return member('params');
+      case 'CatchClause':
+        return node.type === 'Identifier' && direct('param');
       case 'ArrayPattern':
         return member('elements');
       case 'Property':
@@ -5459,8 +5467,6 @@ function isSupportedExpressionPosition(
             ((parent.kind === 'get' || parent.kind === 'set') &&
               parent.method === false)))
       );
-    case 'CatchClause':
-      return node.type === 'Identifier' && direct('param');
     case 'LabeledStatement':
     case 'BreakStatement':
     case 'ContinueStatement':
@@ -5526,6 +5532,7 @@ function isSupportedNonExpressionPosition(
   const pattern = () =>
     (parent.type === 'VariableDeclarator' && direct('id')) ||
     (isFunctionNode(parent) && member('params')) ||
+    (parent.type === 'CatchClause' && direct('param')) ||
     (parent.type === 'ArrayPattern' && member('elements')) ||
     (parent.type === 'Property' && direct('value')) ||
     (parent.type === 'AssignmentPattern' && direct('left')) ||
@@ -6764,7 +6771,7 @@ function validateEvaluatorChildEdges(
       );
     case 'CatchClause':
       return (
-        validateRequiredChild(node, 'param', isIdentifierNodeOrUnknown) ??
+        validateRequiredChild(node, 'param', isCatchParameterNodeOrUnknown) ??
         validateRequiredChild(node, 'body', isBlockStatementOrUnknown)
       );
     case 'SwitchStatement':
@@ -7434,6 +7441,19 @@ function isBindingPatternNodeOrUnknown(value) {
     isNodeTypeOrUnknown(value, 'ArrayPattern') ||
     isNodeTypeOrUnknown(value, 'AssignmentPattern') ||
     isNodeTypeOrUnknown(value, 'RestElement')
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isCatchParameterNodeOrUnknown(value) {
+  return (
+    isUnknownAstNode(value) ||
+    isNodeTypeOrUnknown(value, 'Identifier') ||
+    isNodeTypeOrUnknown(value, 'ObjectPattern') ||
+    isNodeTypeOrUnknown(value, 'ArrayPattern')
   );
 }
 

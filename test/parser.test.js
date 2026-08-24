@@ -4405,6 +4405,72 @@ const tests = [
     },
   },
   {
+    name: 'catch binding patterns preserve duplicate, lexical collision, and strict binding early errors',
+    run() {
+      for (const source of [
+        'try {} catch ([name, name]) {}',
+        'try {} catch ({ first: name, second: name }) {}',
+        'try {} catch ([name]) { let name; }',
+        '"use strict"; try {} catch ({ eval }) {}',
+        '"use strict"; try {} catch ({ arguments }) {}',
+        'try {} catch {}',
+        'try {} catch ([...[rest]]) {}',
+      ]) {
+        assertThrows(() => parseScript(source), SyntaxError);
+      }
+
+      for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+        const duplicate = parseScript('try {} catch (name) {}');
+        const duplicatePattern = /** @type {any} */ (
+          parseScript('var [first, second] = source;').body[0].declarations[0]
+            .id
+        );
+        duplicatePattern.elements[1].name = 'first';
+        duplicate.body[0].handler.param = duplicatePattern;
+        assertThrows(() => parseCustomScript(entry, duplicate), SyntaxError);
+
+        const crossProperty = parseScript('try {} catch (name) {}');
+        const crossPropertyPattern = /** @type {any} */ (
+          parseScript('var { first, second } = source;').body[0].declarations[0]
+            .id
+        );
+        crossPropertyPattern.properties[1].value.name = 'first';
+        crossProperty.body[0].handler.param = crossPropertyPattern;
+        assertThrows(
+          () => parseCustomScript(entry, crossProperty),
+          SyntaxError,
+        );
+
+        const collision = parseScript('try {} catch (name) { let other; }');
+        collision.body[0].handler.param = parseScript(
+          'var [other] = source;',
+        ).body[0].declarations[0].id;
+        assertThrows(() => parseCustomScript(entry, collision), SyntaxError);
+
+        const strict = parseScript('"use strict"; try {} catch (name) {}');
+        const strictPattern = /** @type {any} */ (
+          parseScript('var { value } = source;').body[0].declarations[0].id
+        );
+        strictPattern.properties[0].value.name = 'eval';
+        strict.body[1].handler.param = strictPattern;
+        assertThrows(() => parseCustomScript(entry, strict), SyntaxError);
+
+        const strictArguments = parseScript(
+          '"use strict"; try {} catch (name) {}',
+        );
+        const argumentsPattern = /** @type {any} */ (
+          parseScript('var { value } = source;').body[0].declarations[0].id
+        );
+        argumentsPattern.properties[0].value.name = 'arguments';
+        strictArguments.body[1].handler.param = argumentsPattern;
+        assertThrows(
+          () => parseCustomScript(entry, strictArguments),
+          SyntaxError,
+        );
+      }
+    },
+  },
+  {
     name: 'a nested-block lexical declaration evaluates instead of raising UnsupportedNodeError',
     run() {
       const realm = createRealm();
@@ -4447,6 +4513,91 @@ const tests = [
     run() {
       parseScript('function f({x}, [y], z = 1, ...rest) {}');
       parseScript('(function ({x: y = 1}, [z, ...tail]) {})');
+    },
+  },
+  {
+    name: 'catch parameters admit ES2015 array and object binding patterns',
+    run() {
+      for (const source of [
+        'try { throw [1]; } catch ([value]) { value; }',
+        'try { throw { value: 1 }; } catch ({ value }) { value; }',
+        'try { throw [1, 2, 3]; } catch ([head, ...tail]) { tail; }',
+      ]) {
+        assertSame(parseScript(source).type, 'Program', source);
+        assertSame(parseEval(source).type, 'Program', source);
+      }
+    },
+  },
+  {
+    name: 'custom and reusable catch parameters accept only ES2015 catch binding forms',
+    run() {
+      /**
+       * @param {string} source
+       * @returns {any}
+       */
+      function catchParameterNode(source) {
+        const statement = parseScript(source).body[0];
+
+        if (statement.type === 'VariableDeclaration') {
+          return statement.declarations[0].id;
+        }
+
+        if (statement.type === 'FunctionDeclaration') {
+          return statement.params[0];
+        }
+
+        if (statement.type === 'ExpressionStatement') {
+          return statement.expression.type === 'AssignmentExpression'
+            ? statement.expression.left
+            : statement.expression;
+        }
+
+        throw new Error(`Unsupported catch parameter source ${source}`);
+      }
+
+      for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+        for (const patternSource of [
+          'var [value] = source;',
+          'var { value } = source;',
+        ]) {
+          const program = parseScript('try {} catch (error) {}');
+          program.body[0].handler.param = catchParameterNode(patternSource);
+
+          assertSame(
+            parseCustomScript(entry, program).type,
+            'Program',
+            `${entry}: ${patternSource}`,
+          );
+        }
+
+        for (const invalidSource of [
+          'function f(value = 1) {}',
+          'function f(...rest) {}',
+          'target.value = 1;',
+          '1;',
+        ]) {
+          const program = parseScript('try {} catch (error) {}');
+          program.body[0].handler.param = catchParameterNode(invalidSource);
+
+          assertThrows(() => parseCustomScript(entry, program), SyntaxError);
+        }
+
+        const optional = parseScript('try {} catch (error) {}');
+        optional.body[0].handler.param = null;
+        assertThrows(() => parseCustomScript(entry, optional), SyntaxError);
+
+        const nestedRest = parseScript('try {} catch (error) {}');
+        nestedRest.body[0].handler.param = {
+          type: 'ArrayPattern',
+          elements: [
+            {
+              type: 'RestElement',
+              argument: catchParameterNode('var [rest] = source;'),
+            },
+          ],
+        };
+        assertThrows(() => parseCustomScript(entry, nestedRest), SyntaxError);
+      }
     },
   },
   {
