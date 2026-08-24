@@ -15233,7 +15233,7 @@
           "path": "tools/test262/es2015-audit-evidence.json",
           "operation": "replace-exact",
           "baseSha256": "eabaeb8245a6988443d91b21219c9e7919ec22639d6e8515a8dadbe5ddfc217f",
-          "headSha256": "06817df31fa640d058ce19ac6b01e589e487313a7ec6572f3d888d5412ffd197",
+          "headSha256": "50f9a54346d0e9e5168a6ac6b0b8de6d709e2c5b808d6c8b036e5113612e638c",
           "projectionSha256": null
         },
         {
@@ -15280,17 +15280,17 @@
         },
         {
           "path": "tools/test262/es2015-taxonomy.json",
-          "operation": "project",
+          "operation": "replace-exact",
           "baseSha256": "fba700539b05edd67b6cf67e4c0a1361398a2d0f04212bc7080a83f44abf577a",
-          "headSha256": null,
-          "projectionSha256": "1898cd103a1039cd10d052ec1d2d23fcfde6871a3dba8af249fb24fa6f502f70"
+          "headSha256": "fdf3c8bf229f6c841209e4c4a2196001d45cf0a1c270f334cf06e5f54a00f3c7",
+          "projectionSha256": null
         },
         {
           "path": "tools/test262/upstream-subset.json",
-          "operation": "project",
+          "operation": "replace-exact",
           "baseSha256": "9f768aa8fb0c473e98fe2156d290c4207cea797302cccad6f9b1b922a36b37c0",
-          "headSha256": null,
-          "projectionSha256": "e247565d30ce17195acbc26f8e18b4344b6af72ff4be507641f647b24162c762"
+          "headSha256": "5a5b83b3c28991c5f2ac141ed949a9698966cce85587d671a4417228d5e08b14",
+          "projectionSha256": null
         }
       ],
       "destinations": [

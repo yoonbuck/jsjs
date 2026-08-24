@@ -166,6 +166,18 @@ const M1_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256 =
 const M1_AUTHORITY_REPAIR_HEAD_RECORD_SHA256 =
   '42f7193e216332d40b3c852ae3a4d96aa5c24c29533c8cf344ced59b5b207670';
 const M1_AUTHORITY_REPAIR_PROFILE = 'm1-authority-repair';
+const P1C_AUTHORITY_REPAIR_BASE = 'edccfb8822339dab53c47bbb8c4ae5cc2db93b1b';
+const P1C_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256 =
+  '55b95d0fb5071b411dd3d82051496505e154f043adee62c2bd2e4aae643c2227';
+const P1C_AUTHORITY_REPAIR_BASE_CHECKER_SHA256 =
+  'c806b9987a647b790ecfa736f4b6cc960e86c78755c3a824885313bae4b37e96';
+const P1C_AUTHORITY_REPAIR_BASE_RECORD_SHA256 =
+  '3281bd0001ac48ee6f31d21d12a8faade3652cd194360fcf21c3ffc1b9a3a193';
+const P1C_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256 =
+  '5b94b819025e79ebadb763a7d5eb0ce67174f15effcee61745d305e2a32034c4';
+const P1C_AUTHORITY_REPAIR_HEAD_RECORD_SHA256 =
+  '95036226ee50e365b03c823bab751c6e1d646af0d5c6352a199cd442e2aa9278';
+const P1C_AUTHORITY_REPAIR_PROFILE = 'p1c-authority-repair';
 const M1_AUTHORITY_REPAIR_PROMOTION_PATH =
   'tools/test262/es2015-m1-promotion.json';
 const M1_AUTHORITY_REPAIR_PROMOTION_SHA256 =
@@ -240,6 +252,32 @@ const M1_AUTHORITY_REPAIR_CHANGES = Object.freeze([
   Object.freeze({
     status: 'A',
     path: 'docs/superpowers/plans/2026-08-23-m1-authority-repair.md',
+  }),
+]);
+const P1C_AUTHORITY_REPAIR_CHANGES = Object.freeze([
+  Object.freeze({
+    status: 'M',
+    path: 'tools/test262/es2015-provenance-check.js',
+  }),
+  Object.freeze({
+    status: 'M',
+    path: ES2015_PROVENANCE_FILE,
+  }),
+  Object.freeze({
+    status: 'M',
+    path: 'test/node/es2015-provenance.test.js',
+  }),
+  Object.freeze({
+    status: 'M',
+    path: 'docs/testing.md',
+  }),
+  Object.freeze({
+    status: 'A',
+    path: 'docs/superpowers/specs/2026-08-24-p1c-authority-repair-design.md',
+  }),
+  Object.freeze({
+    status: 'A',
+    path: 'docs/superpowers/plans/2026-08-24-p1c-authority-repair.md',
   }),
 ]);
 const H0_BOOTSTRAP_REPAIR_PATHS = Object.freeze([
@@ -317,8 +355,19 @@ export class Es2015ProvenanceCheckError extends Error {
  *   headManifestSha256: string,
  *   headRecordSha256: string,
  * }} M1AuthorityRepairMarker
+ * @typedef {{
+ *   kind: 'p1c-authority-repair',
+ *   text: string,
+ *   code: 'P1C',
+ *   issue: 116,
+ *   base: string,
+ *   baseManifestSha256: string,
+ *   baseRecordSha256: string,
+ *   headManifestSha256: string,
+ *   headRecordSha256: string,
+ * }} P1CAuthorityRepairMarker
  * @typedef {{ text: string, profile: string, baseLedgerSha256: string }} LegacyRangeMarker
- * @typedef {LegacyRangeMarker | RoadmapMarker | H0BootstrapRepairMarker | M1AuthorityRepairMarker} ProvenanceRangeMarker
+ * @typedef {LegacyRangeMarker | RoadmapMarker | H0BootstrapRepairMarker | M1AuthorityRepairMarker | P1CAuthorityRepairMarker} ProvenanceRangeMarker
  */
 
 /**
@@ -792,6 +841,16 @@ async function checkRange(deps, options) {
   if (marker === null) return;
 
   const baseManifestText = await deps.readGitFile(base, ES2015_PROVENANCE_FILE);
+  if (isP1CAuthorityRepairMarker(marker)) {
+    await validateP1CAuthorityRepairRange(marker, {
+      deps,
+      base,
+      head,
+      changes,
+      baseManifestText,
+    });
+    return;
+  }
   if (isM1AuthorityRepairMarker(marker)) {
     await validateM1AuthorityRepairRange(marker, {
       deps,
@@ -988,6 +1047,14 @@ function isM1AuthorityRepairMarker(marker) {
   );
 }
 
+/** @param {ProvenanceRangeMarker} marker @returns {marker is P1CAuthorityRepairMarker} */
+function isP1CAuthorityRepairMarker(marker) {
+  return (
+    Object.prototype.hasOwnProperty.call(marker, 'kind') &&
+    /** @type {{ kind?: unknown }} */ (marker).kind === 'p1c-authority-repair'
+  );
+}
+
 /** @param {ProvenanceRangeMarker} marker @returns {marker is RoadmapMarker} */
 function isRoadmapMarker(marker) {
   return (
@@ -1000,6 +1067,9 @@ function isRoadmapMarker(marker) {
 
 /** @param {ProvenanceRangeMarker} marker */
 function rangeProfileForMarker(marker) {
+  if (isP1CAuthorityRepairMarker(marker)) {
+    return P1C_AUTHORITY_REPAIR_PROFILE;
+  }
   if (isM1AuthorityRepairMarker(marker)) {
     return M1_AUTHORITY_REPAIR_PROFILE;
   }
@@ -1016,6 +1086,219 @@ function rangeProfileForMarker(marker) {
       return marker.profile;
     default:
       throw new Error('Unhandled roadmap marker kind');
+  }
+}
+
+/**
+ * @param {P1CAuthorityRepairMarker} marker
+ * @param {{
+ *   deps: ProvenanceCheckDependencies,
+ *   base: string,
+ *   head: string,
+ *   changes: readonly { status: string, path: string, sourcePath: string | null }[],
+ *   baseManifestText: string | null,
+ * }} context
+ */
+export async function validateP1CAuthorityRepairRange(marker, context) {
+  const { deps, base, head, changes, baseManifestText } = context;
+  if (deps.environment.GITHUB_EVENT_NAME !== 'pull_request') {
+    throw new Es2015ProvenanceCheckError(
+      'P1C authority repair requires an ordinary pull_request event',
+    );
+  }
+  if (base !== P1C_AUTHORITY_REPAIR_BASE) {
+    throw new Es2015ProvenanceCheckError(
+      `P1C authority repair range requires base ${P1C_AUTHORITY_REPAIR_BASE}`,
+    );
+  }
+  if ((await deps.mergeBase(base, head)) !== P1C_AUTHORITY_REPAIR_BASE) {
+    throw new Es2015ProvenanceCheckError(
+      `P1C authority repair merge base must be ${P1C_AUTHORITY_REPAIR_BASE}`,
+    );
+  }
+  if (marker.base !== P1C_AUTHORITY_REPAIR_BASE) {
+    throw new Es2015ProvenanceCheckError(
+      `P1C authority repair marker base must be ${P1C_AUTHORITY_REPAIR_BASE}`,
+    );
+  }
+  if (marker.baseManifestSha256 !== P1C_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256) {
+    throw new Es2015ProvenanceCheckError(
+      `P1C authority repair marker base-manifest-sha256 must be ${P1C_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256}`,
+    );
+  }
+  if (marker.baseRecordSha256 !== P1C_AUTHORITY_REPAIR_BASE_RECORD_SHA256) {
+    throw new Es2015ProvenanceCheckError(
+      `P1C authority repair marker base-record-sha256 must be ${P1C_AUTHORITY_REPAIR_BASE_RECORD_SHA256}`,
+    );
+  }
+  if (marker.headManifestSha256 !== P1C_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256) {
+    throw new Es2015ProvenanceCheckError(
+      `P1C authority repair marker head-manifest-sha256 must be ${P1C_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256}`,
+    );
+  }
+  if (marker.headRecordSha256 !== P1C_AUTHORITY_REPAIR_HEAD_RECORD_SHA256) {
+    throw new Es2015ProvenanceCheckError(
+      `P1C authority repair marker head-record-sha256 must be ${P1C_AUTHORITY_REPAIR_HEAD_RECORD_SHA256}`,
+    );
+  }
+  if (
+    baseManifestText === null ||
+    sha256(baseManifestText) !== P1C_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `P1C authority repair BASE manifest sha256 must be ${P1C_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256}`,
+    );
+  }
+  const baseCheckerText = await readRequiredGitFile(deps, base, CHECKER_PATH);
+  if (sha256(baseCheckerText) !== P1C_AUTHORITY_REPAIR_BASE_CHECKER_SHA256) {
+    throw new Es2015ProvenanceCheckError(
+      `P1C authority repair BASE checker sha256 must be ${P1C_AUTHORITY_REPAIR_BASE_CHECKER_SHA256}`,
+    );
+  }
+
+  await validateP1CAuthorityRepairChanges(changes, context);
+  const baseManifest = parseRangeManifest(
+    baseManifestText,
+    'P1C authority repair base',
+  );
+  const headManifestText = await readRequiredGitFile(
+    deps,
+    head,
+    ES2015_PROVENANCE_FILE,
+  );
+  const headManifest = parseRangeManifest(
+    headManifestText,
+    'P1C authority repair head',
+  );
+  if (baseManifest.version !== 3 || headManifest.version !== 3) {
+    throw new Es2015ProvenanceCheckError(
+      'P1C authority repair requires canonical schema-v3 BASE and HEAD manifests',
+    );
+  }
+  const baseP1C = baseManifest.roadmapAuthorities?.find(
+    (/** @type {{ code: string }} */ authority) => authority.code === 'P1C',
+  );
+  if (
+    baseP1C === undefined ||
+    canonicalRoadmapAuthoritySha256(baseP1C) !==
+      P1C_AUTHORITY_REPAIR_BASE_RECORD_SHA256
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `P1C authority repair BASE P1C record sha256 must be ${P1C_AUTHORITY_REPAIR_BASE_RECORD_SHA256}`,
+    );
+  }
+  const headP1C = assertP1CAuthorityRepairManifestDelta(
+    baseManifest,
+    headManifest,
+  );
+  if (
+    canonicalRoadmapAuthoritySha256(headP1C) !==
+    P1C_AUTHORITY_REPAIR_HEAD_RECORD_SHA256
+  ) {
+    throw new Es2015ProvenanceCheckError(
+      `P1C authority repair HEAD P1C record sha256 must be ${P1C_AUTHORITY_REPAIR_HEAD_RECORD_SHA256}`,
+    );
+  }
+  if (sha256(headManifestText) !== P1C_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256) {
+    throw new Es2015ProvenanceCheckError(
+      `P1C authority repair HEAD manifest sha256 must be ${P1C_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256}`,
+    );
+  }
+  await assertP1CAuthorityRepairImmutableBytes(baseManifest, context);
+}
+
+/**
+ * @param {readonly { status: string, path: string, sourcePath: string | null }[]} changes
+ * @param {{ deps: ProvenanceCheckDependencies, base: string, head: string }} context
+ */
+async function validateP1CAuthorityRepairChanges(changes, context) {
+  /** @type {Map<string, string>} */
+  const expectedByPath = new Map(
+    P1C_AUTHORITY_REPAIR_CHANGES.map((change) => [change.path, change.status]),
+  );
+  const changedPaths = new Set();
+  for (const change of changes) {
+    if (change.status.startsWith('R')) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair range forbids rename ${change.sourcePath} -> ${change.path}`,
+      );
+    }
+    if (change.status.startsWith('C')) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair range forbids copy ${change.sourcePath} -> ${change.path}`,
+      );
+    }
+    if (change.status === 'D') {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair range forbids deleted path ${change.path}`,
+      );
+    }
+    if (!['A', 'M'].includes(change.status)) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair range has unknown git status ${change.status}`,
+      );
+    }
+    if (canonicalRepositoryPath(change.path) !== change.path) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair range path must be canonical: ${change.path}`,
+      );
+    }
+    const expectedStatus = expectedByPath.get(change.path);
+    if (expectedStatus === undefined) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair range includes unexpected path ${change.path}`,
+      );
+    }
+    if (changedPaths.has(change.path)) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair range repeats changed path ${change.path}`,
+      );
+    }
+    if (change.status !== expectedStatus) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair range requires ${expectedStatus} ${change.path}`,
+      );
+    }
+    changedPaths.add(change.path);
+  }
+  for (const change of P1C_AUTHORITY_REPAIR_CHANGES) {
+    if (!changedPaths.has(change.path)) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair range requires ${change.status} ${change.path}`,
+      );
+    }
+  }
+  if (context.deps.readGitMode === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      'P1C authority repair range cannot attest regular-file modes',
+    );
+  }
+  for (const change of P1C_AUTHORITY_REPAIR_CHANGES) {
+    const [baseMode, headMode] = await Promise.all([
+      context.deps.readGitMode(context.base, change.path),
+      context.deps.readGitMode(context.head, change.path),
+    ]);
+    if (change.status === 'A') {
+      if (baseMode !== null) {
+        throw new Es2015ProvenanceCheckError(
+          `P1C authority repair range path ${change.path} must be absent from BASE`,
+        );
+      }
+    } else if (baseMode === null || !REGULAR_GIT_FILE_MODES.has(baseMode)) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair range path ${change.path} must be a regular file in BASE`,
+      );
+    }
+    if (headMode === null || !REGULAR_GIT_FILE_MODES.has(headMode)) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair range path ${change.path} must be a regular file in HEAD`,
+      );
+    }
+    if (change.status === 'M' && baseMode !== headMode) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair range path ${change.path} must retain its exact regular-file mode between BASE and HEAD`,
+      );
+    }
   }
 }
 
@@ -1610,6 +1893,74 @@ export function assertP1CAuthorityRepairManifestDelta(
     );
   }
   return headP1C;
+}
+
+/**
+ * @param {ReturnType<typeof parseEs2015ProvenanceManifest>} baseManifest
+ * @param {{ deps: ProvenanceCheckDependencies, base: string, head: string }} context
+ */
+export async function assertP1CAuthorityRepairImmutableBytes(
+  baseManifest,
+  context,
+) {
+  if (context.deps.readGitMode === undefined) {
+    throw new Es2015ProvenanceCheckError(
+      'P1C authority repair cannot attest immutable file modes',
+    );
+  }
+  const immutablePaths = new Set([
+    WORKFLOW_PATH,
+    'tools/ci/pipeline.js',
+    'tools/test262/es2015-policy.json',
+    FEATURES_FILE,
+    ...ES2015_PROVENANCE_DECISION_CODES.map(
+      (code) => `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+    ),
+    ...(baseManifest.roadmapAuthorities ?? []).flatMap(
+      (
+        /** @type {{ evidence: readonly { path: string }[], protectedOutputs: readonly { path: string }[] }} */ authority,
+      ) => [
+        ...authority.evidence.map((entry) => entry.path),
+        ...authority.protectedOutputs.map((entry) => entry.path),
+      ],
+    ),
+  ]);
+  for (const path of immutablePaths) {
+    const [baseText, headText, baseMode, headMode] = await Promise.all([
+      context.deps.readGitFile(context.base, path),
+      context.deps.readGitFile(context.head, path),
+      context.deps.readGitMode(context.base, path),
+      context.deps.readGitMode(context.head, path),
+    ]);
+    if (baseText === null || baseMode === null) {
+      if (
+        baseText !== null ||
+        baseMode !== null ||
+        headText !== null ||
+        headMode !== null
+      ) {
+        throw new Es2015ProvenanceCheckError(
+          `P1C authority repair immutable path ${path} must remain byte-identical between BASE and HEAD`,
+        );
+      }
+      continue;
+    }
+    if (headText === null || baseText !== headText) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair immutable path ${path} must remain byte-identical between BASE and HEAD`,
+      );
+    }
+    if (
+      headMode === null ||
+      !REGULAR_GIT_FILE_MODES.has(baseMode) ||
+      !REGULAR_GIT_FILE_MODES.has(headMode) ||
+      baseMode !== headMode
+    ) {
+      throw new Es2015ProvenanceCheckError(
+        `P1C authority repair immutable path ${path} must retain its exact regular-file mode between BASE and HEAD`,
+      );
+    }
+  }
 }
 
 /**
@@ -4825,6 +5176,27 @@ export function parseM1AuthorityRepairMarker(text) {
   };
 }
 
+/** @param {string} text @returns {P1CAuthorityRepairMarker} */
+export function parseP1CAuthorityRepairMarker(text) {
+  const match = p1cAuthorityRepairMarkerPattern().exec(text);
+  if (match === null) {
+    throw new Es2015ProvenanceCheckError(
+      'P1C authority repair marker is not authoritative',
+    );
+  }
+  return {
+    kind: 'p1c-authority-repair',
+    text,
+    code: 'P1C',
+    issue: 116,
+    base: match[1],
+    baseManifestSha256: match[2],
+    baseRecordSha256: match[3],
+    headManifestSha256: match[4],
+    headRecordSha256: match[5],
+  };
+}
+
 /** @param {string} text @returns {RoadmapMarker} */
 export function parseRoadmapAuthorityMarker(text) {
   /** @type {readonly ((candidate: string) => RoadmapMarker | null)[]} */
@@ -4904,6 +5276,12 @@ function authoritativeRangeMarkers(body, includeOrdinaryPullRequestRepairs) {
         marker: parseM1AuthorityRepairMarker(match[2]),
       });
     }
+    for (const match of body.matchAll(p1cAuthorityRepairBodyPattern())) {
+      markers.push({
+        index: match.index ?? 0,
+        marker: parseP1CAuthorityRepairMarker(match[2]),
+      });
+    }
   }
   for (const matcher of [
     roadmapMigrationBodyPattern(),
@@ -4936,6 +5314,14 @@ function m1AuthorityRepairMarkerPattern() {
 
 function m1AuthorityRepairBodyPattern() {
   return /(^|\n)(<!-- es2015-m1-authority-repair\nparent:70\ncode:M1\nissue:80\nbase:[0-9a-f]{40}\nbase-manifest-sha256:[0-9a-f]{64}\nbase-record-sha256:[0-9a-f]{64}\nhead-manifest-sha256:[0-9a-f]{64}\nhead-record-sha256:[0-9a-f]{64}\n-->)(?=\n|$)/gu;
+}
+
+function p1cAuthorityRepairMarkerPattern() {
+  return /^<!-- es2015-p1c-authority-repair\nparent:70\ncode:P1C\nissue:116\nbase:([0-9a-f]{40})\nbase-manifest-sha256:([0-9a-f]{64})\nbase-record-sha256:([0-9a-f]{64})\nhead-manifest-sha256:([0-9a-f]{64})\nhead-record-sha256:([0-9a-f]{64})\n-->$/u;
+}
+
+function p1cAuthorityRepairBodyPattern() {
+  return /(^|\n)(<!-- es2015-p1c-authority-repair\nparent:70\ncode:P1C\nissue:116\nbase:[0-9a-f]{40}\nbase-manifest-sha256:[0-9a-f]{64}\nbase-record-sha256:[0-9a-f]{64}\nhead-manifest-sha256:[0-9a-f]{64}\nhead-record-sha256:[0-9a-f]{64}\n-->)(?=\n|$)/gu;
 }
 
 function roadmapMigrationMarkerPattern() {

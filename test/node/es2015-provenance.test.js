@@ -196,6 +196,34 @@ const P1C_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256 =
   '5b94b819025e79ebadb763a7d5eb0ce67174f15effcee61745d305e2a32034c4';
 const P1C_AUTHORITY_REPAIR_HEAD_RECORD_SHA256 =
   '95036226ee50e365b03c823bab751c6e1d646af0d5c6352a199cd442e2aa9278';
+const P1C_AUTHORITY_REPAIR_MARKER_SHA256 =
+  '780c1ce94d24ef9e249c209fdd28a56ab9ec885ec4d75a92ba7c0ecd21396177';
+const P1C_AUTHORITY_REPAIR_CHANGES = Object.freeze([
+  {
+    status: 'M',
+    path: 'tools/test262/es2015-provenance-check.js',
+  },
+  {
+    status: 'M',
+    path: ES2015_PROVENANCE_FILE,
+  },
+  {
+    status: 'M',
+    path: 'test/node/es2015-provenance.test.js',
+  },
+  {
+    status: 'M',
+    path: 'docs/testing.md',
+  },
+  {
+    status: 'A',
+    path: 'docs/superpowers/specs/2026-08-24-p1c-authority-repair-design.md',
+  },
+  {
+    status: 'A',
+    path: 'docs/superpowers/plans/2026-08-24-p1c-authority-repair.md',
+  },
+]);
 const P1C_AUTHORITY_REPAIR_APPLIED_RECORD_SHA256 =
   '64db02e17f5d7e7f26805eee912d625b53a989e4c4ae17b15165bea3118bfefa';
 const P1C_AUTHORITY_REPAIR_APPLIED_MANIFEST_SHA256 =
@@ -1978,6 +2006,28 @@ head-record-sha256:${options.headRecordSha256 ?? M1_AUTHORITY_REPAIR_HEAD_RECORD
 -->`;
 }
 
+/**
+ * @param {{
+ *   base?: string,
+ *   baseManifestSha256?: string,
+ *   baseRecordSha256?: string,
+ *   headManifestSha256?: string,
+ *   headRecordSha256?: string,
+ * }} [options]
+ */
+function p1cAuthorityRepairMarker(options = {}) {
+  return `<!-- es2015-p1c-authority-repair
+parent:70
+code:P1C
+issue:116
+base:${options.base ?? P1C_AUTHORITY_REPAIR_BASE}
+base-manifest-sha256:${options.baseManifestSha256 ?? P1C_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256}
+base-record-sha256:${options.baseRecordSha256 ?? P1C_AUTHORITY_REPAIR_BASE_RECORD_SHA256}
+head-manifest-sha256:${options.headManifestSha256 ?? P1C_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256}
+head-record-sha256:${options.headRecordSha256 ?? P1C_AUTHORITY_REPAIR_HEAD_RECORD_SHA256}
+-->`;
+}
+
 /** @type {string | null} */
 let m1AuthorityRepairBaseManifestTextCache = null;
 
@@ -2105,6 +2155,27 @@ function p1cAuthorityRepairPendingManifestValue() {
 
 function p1cAuthorityRepairPendingManifestText() {
   return prettyJson(p1cAuthorityRepairPendingManifestValue());
+}
+
+/** @param {Record<string, any>} baseManifest */
+function p1cAuthorityRepairImmutablePaths(baseManifest) {
+  return new Set([
+    '.github/workflows/ci.yml',
+    'tools/ci/pipeline.js',
+    'tools/test262/es2015-policy.json',
+    'tools/test262/features.json',
+    ...ES2015_PROVENANCE_DECISION_CODES.map(
+      (code) => `${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+    ),
+    ...baseManifest.roadmapAuthorities.flatMap(
+      (
+        /** @type {{ evidence: readonly { path: string }[], protectedOutputs: readonly { path: string }[] }} */ authority,
+      ) => [
+        ...authority.evidence.map((entry) => entry.path),
+        ...authority.protectedOutputs.map((entry) => entry.path),
+      ],
+    ),
+  ]);
 }
 
 function p1cAuthorityRepairAppliedManifestValue() {
@@ -4189,6 +4260,137 @@ function mutatedM1AuthorityRepairHeadManifestText(mutate, options = {}) {
   );
   assertSame(m1 !== undefined, true);
   mutate(manifest, m1);
+  return options.canonical === false
+    ? JSON.stringify(manifest)
+    : prettyJson(manifest);
+}
+
+/** @type {ReadonlyMap<string, string> | null} */
+let p1cAuthorityRepairBaseFilesCache = null;
+
+function p1cAuthorityRepairBaseFiles() {
+  if (p1cAuthorityRepairBaseFilesCache !== null) {
+    return p1cAuthorityRepairBaseFilesCache;
+  }
+  const baseManifest = JSON.parse(p1cAuthorityRepairBaseManifestText());
+  const paths = new Set([
+    ...p1cAuthorityRepairImmutablePaths(baseManifest),
+    ES2015_PROVENANCE_FILE,
+    CHECKER_PATH,
+    'test/node/es2015-provenance.test.js',
+    'docs/testing.md',
+  ]);
+  const files = new Map();
+  for (const path of paths) {
+    const bytes = readOptionalGitFixtureBuffer(P1C_AUTHORITY_REPAIR_BASE, path);
+    if (bytes !== null) files.set(path, bytes.toString('utf8'));
+  }
+  p1cAuthorityRepairBaseFilesCache = files;
+  return files;
+}
+
+/**
+ * @param {{
+ *   baseAbsentPaths?: readonly string[],
+ *   baseFiles?: ReadonlyMap<string, string>,
+ *   baseManifestText?: string,
+ *   baseModes?: ReadonlyMap<string, string>,
+ *   baseSha?: string,
+ *   body?: string,
+ *   changes?: readonly { status: string, path: string, sourcePath?: string }[],
+ *   eventName?: string | null,
+ *   headFiles?: ReadonlyMap<string, string>,
+ *   headManifestText?: string,
+ *   headModes?: ReadonlyMap<string, string>,
+ *   headSha?: string,
+ *   mergeBase?: string,
+ * }} [options]
+ */
+function p1cAuthorityRepairRangeDependencies(options = {}) {
+  const baseManifestText =
+    options.baseManifestText ?? p1cAuthorityRepairBaseManifestText();
+  const headManifestText =
+    options.headManifestText ?? p1cAuthorityRepairPendingManifestText();
+  const baseFiles = new Map(p1cAuthorityRepairBaseFiles());
+  baseFiles.set(ES2015_PROVENANCE_FILE, baseManifestText);
+  for (const path of options.baseAbsentPaths ?? []) {
+    baseFiles.delete(path);
+  }
+  for (const [path, text] of options.baseFiles ?? []) {
+    baseFiles.set(path, text);
+  }
+  const headFiles = new Map(baseFiles);
+  headFiles.set(CHECKER_PATH, 'P1C authority repair HEAD checker fixture\n');
+  headFiles.set(ES2015_PROVENANCE_FILE, headManifestText);
+  headFiles.set(
+    'test/node/es2015-provenance.test.js',
+    'P1C authority repair HEAD focused test fixture\n',
+  );
+  headFiles.set('docs/testing.md', 'P1C authority repair HEAD docs fixture\n');
+  headFiles.set(
+    'docs/superpowers/specs/2026-08-24-p1c-authority-repair-design.md',
+    '# P1C authority repair design fixture\n',
+  );
+  headFiles.set(
+    'docs/superpowers/plans/2026-08-24-p1c-authority-repair.md',
+    '# P1C authority repair plan fixture\n',
+  );
+  for (const [path, text] of options.headFiles ?? []) {
+    headFiles.set(path, text);
+  }
+  const dependencies = rangeCheckDependencies({
+    changes: options.changes ?? P1C_AUTHORITY_REPAIR_CHANGES,
+    baseSha: options.baseSha ?? P1C_AUTHORITY_REPAIR_BASE,
+    headSha: options.headSha ?? RANGE_HEAD_SHA,
+    baseFiles,
+    baseManifestText,
+    baseModes: options.baseModes,
+    headFiles,
+    headManifestText,
+    headModes: options.headModes,
+    mergeBase: options.mergeBase,
+  });
+  dependencies.environment = {
+    TZ: 'UTC',
+    ...(options.eventName === null
+      ? {}
+      : { GITHUB_EVENT_NAME: options.eventName ?? 'pull_request' }),
+    PROVENANCE_PR_BODY: options.body ?? p1cAuthorityRepairMarker(),
+  };
+  return dependencies;
+}
+
+/** @param {string} [base] @param {string} [head] */
+function p1cAuthorityRepairCiArgs(
+  base = P1C_AUTHORITY_REPAIR_BASE,
+  head = RANGE_HEAD_SHA,
+) {
+  return [
+    '--check-range',
+    `--base=${base}`,
+    `--head=${head}`,
+    '--pr-body-env=PROVENANCE_PR_BODY',
+  ];
+}
+
+function p1cAuthorityRepairContextChanges() {
+  return P1C_AUTHORITY_REPAIR_CHANGES.map((change) => ({
+    ...change,
+    sourcePath: null,
+  }));
+}
+
+/**
+ * @param {(manifest: Record<string, any>, p1c: Record<string, any>) => void} mutate
+ * @param {{ canonical?: boolean }} [options]
+ */
+function mutatedP1CAuthorityRepairHeadManifestText(mutate, options = {}) {
+  const manifest = p1cAuthorityRepairPendingManifestValue();
+  const p1c = manifest.roadmapAuthorities.find(
+    (/** @type {{ code: string }} */ authority) => authority.code === 'P1C',
+  );
+  assertSame(p1c !== undefined, true);
+  mutate(manifest, p1c);
   return options.canonical === false
     ? JSON.stringify(manifest)
     : prettyJson(manifest);
@@ -11162,6 +11364,674 @@ export default [
         ).message,
         `M1 authority repair immutable path ${modePath} must retain its exact regular-file mode between BASE and HEAD`,
       );
+    },
+  },
+  {
+    name: 'ES2015 P1C authority repair parses the exact marker and rejects malformed or ineligible activation',
+    run: async () => {
+      const checker =
+        await import('../../tools/test262/es2015-provenance-check.js');
+      assertSame(typeof checker.parseP1CAuthorityRepairMarker, 'function');
+      const marker = p1cAuthorityRepairMarker();
+      assertSame(sha256(`${marker}\n`), P1C_AUTHORITY_REPAIR_MARKER_SHA256);
+      assertSame(
+        json(checker.parseP1CAuthorityRepairMarker(marker)),
+        json({
+          kind: 'p1c-authority-repair',
+          text: marker,
+          code: 'P1C',
+          issue: 116,
+          base: P1C_AUTHORITY_REPAIR_BASE,
+          baseManifestSha256: P1C_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256,
+          baseRecordSha256: P1C_AUTHORITY_REPAIR_BASE_RECORD_SHA256,
+          headManifestSha256: P1C_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256,
+          headRecordSha256: P1C_AUTHORITY_REPAIR_HEAD_RECORD_SHA256,
+        }),
+      );
+
+      for (const body of [
+        `${marker}\n${marker}`,
+        `${marker}\n${roadmapPreparationMarker()}`,
+      ]) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                p1cAuthorityRepairCiArgs(),
+                p1cAuthorityRepairRangeDependencies({ body }),
+              ),
+            )
+          ).message,
+          'PR body must contain exactly one authoritative provenance marker',
+        );
+      }
+
+      const malformedMarkers = [
+        marker.replace(
+          P1C_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256,
+          P1C_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256.toUpperCase(),
+        ),
+        marker.replace(/\n/gu, '\r\n'),
+        marker.replace('code:P1C\nissue:116', 'issue:116\ncode:P1C'),
+        marker.replace('code:P1C\n', ''),
+        marker.replace('code:P1C\n', 'code:P1C\ncode:P1C\n'),
+        marker.replace('code:P1C\n', 'code:P1C\nextra:no\n'),
+        marker.replace('code:P1C', 'code: P1C'),
+        `prefix ${marker}`,
+        `${marker} suffix`,
+      ];
+      for (const malformed of malformedMarkers) {
+        const parseError = assertThrows(
+          () => checker.parseP1CAuthorityRepairMarker(malformed),
+          Es2015ProvenanceCheckError,
+        );
+        assertSame(
+          parseError.message,
+          'P1C authority repair marker is not authoritative',
+          malformed,
+        );
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                p1cAuthorityRepairCiArgs(),
+                p1cAuthorityRepairRangeDependencies({ body: malformed }),
+              ),
+            )
+          ).message,
+          'A provenance-owned PR range requires one authoritative provenance marker',
+          malformed,
+        );
+      }
+
+      for (const eventName of ['pull_request_target', 'push', null]) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                p1cAuthorityRepairCiArgs(),
+                p1cAuthorityRepairRangeDependencies({ eventName }),
+              ),
+            )
+          ).message,
+          eventName === 'pull_request_target'
+            ? 'A provenance-owned PR range requires one authoritative provenance marker'
+            : 'Provenance PR range checking requires a pull_request event',
+          String(eventName),
+        );
+      }
+
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              [
+                '--check-range',
+                `--base=${P1C_AUTHORITY_REPAIR_BASE}`,
+                `--head=${RANGE_HEAD_SHA}`,
+                '--profile=p1c-authority-repair',
+                `--marker=${marker}`,
+              ],
+              p1cAuthorityRepairRangeDependencies(),
+            ),
+          )
+        ).message,
+        'Provenance PR marker is not authoritative',
+      );
+    },
+  },
+  {
+    name: 'ES2015 P1C authority repair validator independently requires an ordinary pull_request event',
+    run: async () => {
+      const checker =
+        await import('../../tools/test262/es2015-provenance-check.js');
+      assertSame(typeof checker.parseP1CAuthorityRepairMarker, 'function');
+      assertSame(typeof checker.validateP1CAuthorityRepairRange, 'function');
+      const marker = checker.parseP1CAuthorityRepairMarker(
+        p1cAuthorityRepairMarker(),
+      );
+      for (const eventName of ['pull_request_target', 'push', null]) {
+        const deps = p1cAuthorityRepairRangeDependencies({ eventName });
+        assertSame(
+          (
+            await rejected(() =>
+              checker.validateP1CAuthorityRepairRange(marker, {
+                deps,
+                base: P1C_AUTHORITY_REPAIR_BASE,
+                head: RANGE_HEAD_SHA,
+                changes: p1cAuthorityRepairContextChanges(),
+                baseManifestText: p1cAuthorityRepairBaseManifestText(),
+              }),
+            )
+          ).message,
+          'P1C authority repair requires an ordinary pull_request event',
+          String(eventName),
+        );
+      }
+    },
+  },
+  {
+    name: 'ES2015 P1C authority repair accepts the exact six-path pending-authority correction',
+    run: async () => {
+      const checker =
+        await import('../../tools/test262/es2015-provenance-check.js');
+      assertSame(typeof checker.validateP1CAuthorityRepairRange, 'function');
+      assertSame(
+        typeof checker.assertP1CAuthorityRepairImmutableBytes,
+        'function',
+      );
+      assertSame(
+        await provenanceCheck(
+          p1cAuthorityRepairCiArgs(),
+          p1cAuthorityRepairRangeDependencies(),
+        ),
+        0,
+      );
+
+      const baseManifestText = p1cAuthorityRepairBaseManifestText();
+      const headManifestText = p1cAuthorityRepairPendingManifestText();
+      const baseManifest = JSON.parse(baseManifestText);
+      const headManifest = JSON.parse(headManifestText);
+      const baseP1C = baseManifest.roadmapAuthorities.find(
+        (/** @type {{ code: string }} */ authority) => authority.code === 'P1C',
+      );
+      const headP1C = headManifest.roadmapAuthorities.find(
+        (/** @type {{ code: string }} */ authority) => authority.code === 'P1C',
+      );
+      assertSame(
+        readFileSyncText(
+          new URL(`../../${ES2015_PROVENANCE_FILE}`, import.meta.url),
+          'utf8',
+        ),
+        headManifestText,
+      );
+      assertSame(
+        sha256(baseManifestText),
+        P1C_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256,
+      );
+      assertSame(
+        sha256(readGitFixtureText(P1C_AUTHORITY_REPAIR_BASE, CHECKER_PATH)),
+        P1C_AUTHORITY_REPAIR_BASE_CHECKER_SHA256,
+      );
+      assertSame(
+        canonicalRoadmapAuthoritySha256(baseP1C),
+        P1C_AUTHORITY_REPAIR_BASE_RECORD_SHA256,
+      );
+      assertSame(
+        sha256(headManifestText),
+        P1C_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256,
+      );
+      assertSame(
+        canonicalRoadmapAuthoritySha256(headP1C),
+        P1C_AUTHORITY_REPAIR_HEAD_RECORD_SHA256,
+      );
+      assertSame(headP1C.state, 'pending');
+      assertSame(headP1C.evidence.length, 6);
+      assertSame(headP1C.protectedOutputs.length, 11);
+    },
+  },
+  {
+    name: 'ES2015 P1C authority repair pins the exact BASE and corrected marker identities',
+    run: async () => {
+      for (const scenario of [
+        {
+          dependencies: p1cAuthorityRepairRangeDependencies({
+            baseSha: RANGE_BASE_SHA,
+          }),
+          args: p1cAuthorityRepairCiArgs(RANGE_BASE_SHA),
+          message: `P1C authority repair range requires base ${P1C_AUTHORITY_REPAIR_BASE}`,
+        },
+        {
+          dependencies: p1cAuthorityRepairRangeDependencies({
+            body: p1cAuthorityRepairMarker({ base: RANGE_BASE_SHA }),
+          }),
+          args: p1cAuthorityRepairCiArgs(),
+          message: `P1C authority repair marker base must be ${P1C_AUTHORITY_REPAIR_BASE}`,
+        },
+        {
+          dependencies: p1cAuthorityRepairRangeDependencies({
+            body: p1cAuthorityRepairMarker({
+              baseManifestSha256: 'a'.repeat(64),
+            }),
+          }),
+          args: p1cAuthorityRepairCiArgs(),
+          message: `P1C authority repair marker base-manifest-sha256 must be ${P1C_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256}`,
+        },
+        {
+          dependencies: p1cAuthorityRepairRangeDependencies({
+            body: p1cAuthorityRepairMarker({
+              baseRecordSha256: 'a'.repeat(64),
+            }),
+          }),
+          args: p1cAuthorityRepairCiArgs(),
+          message: `P1C authority repair marker base-record-sha256 must be ${P1C_AUTHORITY_REPAIR_BASE_RECORD_SHA256}`,
+        },
+        {
+          dependencies: p1cAuthorityRepairRangeDependencies({
+            baseManifestText: `${p1cAuthorityRepairBaseManifestText()}\n`,
+          }),
+          args: p1cAuthorityRepairCiArgs(),
+          message: `P1C authority repair BASE manifest sha256 must be ${P1C_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256}`,
+        },
+        {
+          dependencies: p1cAuthorityRepairRangeDependencies({
+            baseFiles: new Map([[CHECKER_PATH, 'drifted BASE checker\n']]),
+          }),
+          args: p1cAuthorityRepairCiArgs(),
+          message: `P1C authority repair BASE checker sha256 must be ${P1C_AUTHORITY_REPAIR_BASE_CHECKER_SHA256}`,
+        },
+      ]) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(scenario.args, scenario.dependencies),
+            )
+          ).message,
+          scenario.message,
+        );
+      }
+
+      const checker =
+        await import('../../tools/test262/es2015-provenance-check.js');
+      const deps = p1cAuthorityRepairRangeDependencies({
+        mergeBase: RANGE_BASE_SHA,
+      });
+      assertSame(
+        (
+          await rejected(() =>
+            checker.validateP1CAuthorityRepairRange(
+              checker.parseP1CAuthorityRepairMarker(p1cAuthorityRepairMarker()),
+              {
+                deps,
+                base: P1C_AUTHORITY_REPAIR_BASE,
+                head: RANGE_HEAD_SHA,
+                changes: p1cAuthorityRepairContextChanges(),
+                baseManifestText: p1cAuthorityRepairBaseManifestText(),
+              },
+            ),
+          )
+        ).message,
+        `P1C authority repair merge base must be ${P1C_AUTHORITY_REPAIR_BASE}`,
+      );
+    },
+  },
+  {
+    name: 'ES2015 P1C authority repair range requires the exact six canonical regular-file changes',
+    run: async () => {
+      for (const required of P1C_AUTHORITY_REPAIR_CHANGES) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                p1cAuthorityRepairCiArgs(),
+                p1cAuthorityRepairRangeDependencies({
+                  changes: P1C_AUTHORITY_REPAIR_CHANGES.filter(
+                    (change) => change.path !== required.path,
+                  ),
+                }),
+              ),
+            )
+          ).message,
+          `P1C authority repair range requires ${required.status} ${required.path}`,
+          required.path,
+        );
+      }
+
+      const foreignPath =
+        'docs/superpowers/specs/2026-08-23-p1c-authority-repair-design.md';
+      const replacements = [
+        {
+          name: 'alternate repair doc',
+          removedPath: 'docs/testing.md',
+          change: { status: 'M', path: foreignPath },
+          message: `P1C authority repair range includes unexpected path ${foreignPath}`,
+        },
+        ...[
+          '.github/workflows/ci.yml',
+          'tools/ci/pipeline.js',
+          'tools/test262/es2015-p1c-baseline.json',
+          'tools/test262/es2015-audit-evidence.json',
+          'src/index.js',
+        ].map((path) => ({
+          name: `foreign ${path}`,
+          removedPath: 'docs/testing.md',
+          change: { status: 'M', path },
+          message: `P1C authority repair range includes unexpected path ${path}`,
+        })),
+        {
+          name: 'duplicate path',
+          change: P1C_AUTHORITY_REPAIR_CHANGES[0],
+          message:
+            'P1C authority repair range repeats changed path tools/test262/es2015-provenance-check.js',
+        },
+        {
+          name: 'rename',
+          removedPath: 'docs/testing.md',
+          change: {
+            status: 'R100',
+            sourcePath: 'docs/testing.md',
+            path: 'docs/testing-copy.md',
+          },
+          message:
+            'P1C authority repair range forbids rename docs/testing.md -> docs/testing-copy.md',
+        },
+        {
+          name: 'copy',
+          removedPath: 'docs/testing.md',
+          change: {
+            status: 'C100',
+            sourcePath: 'docs/testing.md',
+            path: 'docs/testing-copy.md',
+          },
+          message:
+            'P1C authority repair range forbids copy docs/testing.md -> docs/testing-copy.md',
+        },
+        {
+          name: 'delete',
+          removedPath: 'docs/testing.md',
+          change: { status: 'D', path: 'docs/testing.md' },
+          message:
+            'P1C authority repair range forbids deleted path docs/testing.md',
+        },
+        {
+          name: 'wrong modified status',
+          removedPath: CHECKER_PATH,
+          change: { status: 'A', path: CHECKER_PATH },
+          message: `P1C authority repair range requires M ${CHECKER_PATH}`,
+        },
+        {
+          name: 'wrong added status',
+          removedPath:
+            'docs/superpowers/specs/2026-08-24-p1c-authority-repair-design.md',
+          change: {
+            status: 'M',
+            path: 'docs/superpowers/specs/2026-08-24-p1c-authority-repair-design.md',
+          },
+          message:
+            'P1C authority repair range requires A docs/superpowers/specs/2026-08-24-p1c-authority-repair-design.md',
+        },
+        {
+          name: 'path alias',
+          removedPath: CHECKER_PATH,
+          change: {
+            status: 'M',
+            path: `./${CHECKER_PATH}`,
+          },
+          message: `P1C authority repair range path must be canonical: ./${CHECKER_PATH}`,
+        },
+        {
+          name: 'encoded alias',
+          removedPath: CHECKER_PATH,
+          change: {
+            status: 'M',
+            path: 'tools/test262/%65s2015-provenance-check.js',
+          },
+          message:
+            'P1C authority repair range path must be canonical: tools/test262/%65s2015-provenance-check.js',
+        },
+        {
+          name: 'path traversal',
+          removedPath: CHECKER_PATH,
+          change: {
+            status: 'M',
+            path: 'tools/test262/../test262/es2015-provenance-check.js',
+          },
+          message:
+            'P1C authority repair range path must be canonical: tools/test262/../test262/es2015-provenance-check.js',
+        },
+      ];
+      for (const scenario of replacements) {
+        const changes =
+          scenario.removedPath === undefined
+            ? [...P1C_AUTHORITY_REPAIR_CHANGES]
+            : P1C_AUTHORITY_REPAIR_CHANGES.filter(
+                (change) => change.path !== scenario.removedPath,
+              );
+        changes.push(scenario.change);
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                p1cAuthorityRepairCiArgs(),
+                p1cAuthorityRepairRangeDependencies({ changes }),
+              ),
+            )
+          ).message,
+          scenario.message,
+          scenario.name,
+        );
+      }
+
+      for (const scenario of [
+        {
+          name: 'BASE-absent modified path',
+          options: { baseAbsentPaths: ['docs/testing.md'] },
+          message:
+            'P1C authority repair range path docs/testing.md must be a regular file in BASE',
+        },
+        {
+          name: 'added path present in BASE',
+          options: {
+            baseFiles: new Map([
+              [
+                'docs/superpowers/specs/2026-08-24-p1c-authority-repair-design.md',
+                '# stale repair design\n',
+              ],
+            ]),
+          },
+          message:
+            'P1C authority repair range path docs/superpowers/specs/2026-08-24-p1c-authority-repair-design.md must be absent from BASE',
+        },
+        {
+          name: 'non-regular BASE mode',
+          options: { baseModes: new Map([[CHECKER_PATH, '120000']]) },
+          message: `P1C authority repair range path ${CHECKER_PATH} must be a regular file in BASE`,
+        },
+        {
+          name: 'non-regular HEAD mode',
+          options: {
+            headModes: new Map([['docs/testing.md', '120000']]),
+          },
+          message:
+            'P1C authority repair range path docs/testing.md must be a regular file in HEAD',
+        },
+        {
+          name: 'modified mode drift',
+          options: { headModes: new Map([[CHECKER_PATH, '100755']]) },
+          message: `P1C authority repair range path ${CHECKER_PATH} must retain its exact regular-file mode between BASE and HEAD`,
+        },
+      ]) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                p1cAuthorityRepairCiArgs(),
+                p1cAuthorityRepairRangeDependencies(scenario.options),
+              ),
+            )
+          ).message,
+          scenario.message,
+          scenario.name,
+        );
+      }
+    },
+  },
+  {
+    name: 'ES2015 P1C authority repair rejects alternate HEAD identities and noncanonical manifests',
+    run: async () => {
+      for (const scenario of [
+        {
+          body: p1cAuthorityRepairMarker({
+            headManifestSha256: 'a'.repeat(64),
+          }),
+          message: `P1C authority repair marker head-manifest-sha256 must be ${P1C_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256}`,
+        },
+        {
+          body: p1cAuthorityRepairMarker({
+            headRecordSha256: 'a'.repeat(64),
+          }),
+          message: `P1C authority repair marker head-record-sha256 must be ${P1C_AUTHORITY_REPAIR_HEAD_RECORD_SHA256}`,
+        },
+      ]) {
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                p1cAuthorityRepairCiArgs(),
+                p1cAuthorityRepairRangeDependencies({ body: scenario.body }),
+              ),
+            )
+          ).message,
+          scenario.message,
+        );
+      }
+
+      const alternateManifestText = mutatedP1CAuthorityRepairHeadManifestText(
+        (_manifest, p1c) => {
+          p1c.protectedOutputs.find(
+            (/** @type {{ path: string }} */ output) =>
+              output.path === P1C_AUTHORITY_REPAIR_AUDIT_OUTPUT.path,
+          ).headSha256 = 'a'.repeat(64);
+        },
+      );
+      const alternateManifest = JSON.parse(alternateManifestText);
+      const alternateP1C = alternateManifest.roadmapAuthorities.find(
+        (/** @type {{ code: string }} */ authority) => authority.code === 'P1C',
+      );
+      const alternateManifestSha256 = sha256(alternateManifestText);
+      const alternateRecordSha256 =
+        canonicalRoadmapAuthoritySha256(alternateP1C);
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              p1cAuthorityRepairCiArgs(),
+              p1cAuthorityRepairRangeDependencies({
+                body: p1cAuthorityRepairMarker({
+                  headManifestSha256: alternateManifestSha256,
+                  headRecordSha256: alternateRecordSha256,
+                }),
+                headManifestText: alternateManifestText,
+              }),
+            ),
+          )
+        ).message,
+        `P1C authority repair marker head-manifest-sha256 must be ${P1C_AUTHORITY_REPAIR_HEAD_MANIFEST_SHA256}`,
+      );
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              p1cAuthorityRepairCiArgs(),
+              p1cAuthorityRepairRangeDependencies({
+                body: p1cAuthorityRepairMarker({
+                  headRecordSha256: alternateRecordSha256,
+                }),
+                headManifestText: alternateManifestText,
+              }),
+            ),
+          )
+        ).message,
+        `P1C authority repair marker head-record-sha256 must be ${P1C_AUTHORITY_REPAIR_HEAD_RECORD_SHA256}`,
+      );
+
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              p1cAuthorityRepairCiArgs(),
+              p1cAuthorityRepairRangeDependencies({
+                baseManifestText: JSON.stringify(
+                  JSON.parse(p1cAuthorityRepairBaseManifestText()),
+                ),
+              }),
+            ),
+          )
+        ).message,
+        `P1C authority repair BASE manifest sha256 must be ${P1C_AUTHORITY_REPAIR_BASE_MANIFEST_SHA256}`,
+      );
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              p1cAuthorityRepairCiArgs(),
+              p1cAuthorityRepairRangeDependencies({
+                headManifestText: mutatedP1CAuthorityRepairHeadManifestText(
+                  () => {},
+                  { canonical: false },
+                ),
+              }),
+            ),
+          )
+        ).message,
+        'P1C authority repair head provenance manifest is not canonical',
+      );
+    },
+  },
+  {
+    name: 'ES2015 P1C authority repair enforces every derived immutable byte and mode',
+    run: async () => {
+      const baseManifest = JSON.parse(p1cAuthorityRepairBaseManifestText());
+      const immutablePaths = p1cAuthorityRepairImmutablePaths(baseManifest);
+      const baseFiles = p1cAuthorityRepairBaseFiles();
+      for (const path of immutablePaths) {
+        const headFiles = new Map([
+          [
+            path,
+            baseFiles.has(path)
+              ? `${baseFiles.get(path)}\nP1C repair drift\n`
+              : `forbidden future P1C repair file ${path}\n`,
+          ],
+        ]);
+        assertSame(
+          (
+            await rejected(() =>
+              provenanceCheck(
+                p1cAuthorityRepairCiArgs(),
+                p1cAuthorityRepairRangeDependencies({ headFiles }),
+              ),
+            )
+          ).message,
+          `P1C authority repair immutable path ${path} must remain byte-identical between BASE and HEAD`,
+          path,
+        );
+      }
+
+      const modePath = '.github/workflows/ci.yml';
+      assertSame(
+        (
+          await rejected(() =>
+            provenanceCheck(
+              p1cAuthorityRepairCiArgs(),
+              p1cAuthorityRepairRangeDependencies({
+                headModes: new Map([[modePath, '100755']]),
+              }),
+            ),
+          )
+        ).message,
+        `P1C authority repair immutable path ${modePath} must retain its exact regular-file mode between BASE and HEAD`,
+      );
+
+      const baseP1C = baseManifest.roadmapAuthorities.find(
+        (/** @type {{ code: string }} */ authority) => authority.code === 'P1C',
+      );
+      const baseAbsentEvidencePaths = baseP1C.evidence
+        .map((/** @type {{ path: string }} */ entry) => entry.path)
+        .filter((/** @type {string} */ path) => !baseFiles.has(path));
+      assertSame(baseAbsentEvidencePaths.length, 6);
+      const dependencies = p1cAuthorityRepairRangeDependencies();
+      for (const path of baseAbsentEvidencePaths) {
+        assertSame(
+          await dependencies.readGitFile(P1C_AUTHORITY_REPAIR_BASE, path),
+          null,
+          path,
+        );
+        assertSame(
+          await dependencies.readGitFile(RANGE_HEAD_SHA, path),
+          null,
+          path,
+        );
+      }
     },
   },
   {
