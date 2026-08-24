@@ -82,7 +82,8 @@ cd /home/jordan/jsjs/.worktrees/issue78-decomposition && \
 cd /home/jordan/jsjs/.worktrees/issue78-decomposition && npm run typecheck
 ```
 
-This still fails in the unchanged ledger suite:
+The original `task3verify2-typecheck` run at `9fb3f26` failed in the unchanged
+ledger suite:
 
 ```txt
 test/node/es2015-p1c-ledger.test.js(23,39): error TS7006: Parameter 'entry' implicitly has an 'any' type.
@@ -91,8 +92,16 @@ test/node/es2015-p1c-ledger.test.js(140,40): error TS2339: Property 'classificat
 test/node/es2015-p1c-ledger.test.js(141,28): error TS2339: Property 'classifications' does not exist on type 'object'.
 ```
 
-`git diff --name-only 50017fe1b7cae2acf28544b45475eaad88f7bed8 -- test/node/es2015-p1c-ledger.test.js`
-returned no paths, so this failure predates Task 3 and remains out of scope.
+That failure was an inherited Task 1 typing defect. It was fixed by
+`6fb6be0` (`test262: tighten P1C ledger typing`) and documented on this branch
+by `19ce450` (`docs: append Task 1 type fix round`).
+
+Fresh verification at current HEAD `19ce450` passes:
+
+```txt
+> typecheck
+> tsc -p jsconfig.json
+```
 
 ## Logs
 
@@ -105,8 +114,10 @@ returned no paths, so this failure predates Task 3 and remains out of scope.
 - `task3verify2-eslint`: changed-file ESLint passed.
 - `task3verify2-prettier`: changed-file Prettier check passed after one write.
 - `task3verify2-diff`: `git diff --check` passed.
-- `task3verify2-typecheck`: repo-wide typecheck still fails in unchanged
-  `test/node/es2015-p1c-ledger.test.js`.
+- `task3verify2-typecheck`: original repo-wide typecheck failure was inherited
+  from Task 1's ledger typing defect.
+- `task3reportupdate-check`: fresh repo-wide typecheck passed at `19ce450`
+  after Task 1 fix commits `6fb6be0` and `19ce450`.
 
 ## Commit
 
@@ -132,5 +143,4 @@ returned no paths, so this failure predates Task 3 and remains out of scope.
 
 ## Concerns
 
-- `npm run typecheck` is still red in the unchanged
-  `test/node/es2015-p1c-ledger.test.js`; no Task 3 files appear in that failure.
+None.
