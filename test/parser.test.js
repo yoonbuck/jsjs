@@ -4516,6 +4516,86 @@ const tests = [
     },
   },
   {
+    name: 'rest element arguments distinguish assignment targets from catch binding patterns',
+    run() {
+      const acceptedSources = [
+        '[a, ...target.value] = arr;',
+        '[a, ...[value]] = arr;',
+        '[a, ...{ value }] = arr;',
+      ];
+
+      for (const source of acceptedSources) {
+        assertSame(parseScript(source).type, 'Program', source);
+        assertSame(parseEval(source).type, 'Program', source);
+      }
+
+      assertThrows(
+        () => parseScript('try {} catch ([...[rest]]) {}'),
+        SyntaxError,
+      );
+
+      /**
+       * @param {string} source
+       * @returns {any}
+       */
+      function restArgumentNode(source) {
+        const statement = parseScript(source).body[0];
+
+        if (statement.type === 'VariableDeclaration') {
+          return statement.declarations[0].id;
+        }
+
+        if (
+          statement.type === 'ExpressionStatement' &&
+          statement.expression.type === 'AssignmentExpression'
+        ) {
+          return statement.expression.left;
+        }
+
+        throw new Error(`Unsupported rest argument source ${source}`);
+      }
+
+      /**
+       * @param {any} argument
+       * @returns {any}
+       */
+      function assignmentRestProgram(argument) {
+        const program = parseScript('[a, ...rest] = arr;');
+        program.body[0].expression.left.elements[1].argument = argument;
+        return program;
+      }
+
+      for (const entry of CUSTOM_SCRIPT_AST_ENTRIES) {
+        for (const [name, source] of [
+          ['member', 'target.value = source;'],
+          ['array', 'var [value] = source;'],
+          ['object', 'var { value } = source;'],
+        ]) {
+          assertSame(
+            parseCustomScript(
+              entry,
+              assignmentRestProgram(restArgumentNode(source)),
+            ).type,
+            'Program',
+            `${entry}: ${name}`,
+          );
+        }
+
+        const nestedCatch = parseScript('try {} catch ([rest]) {}');
+        nestedCatch.body[0].handler.param = {
+          type: 'ArrayPattern',
+          elements: [
+            {
+              type: 'RestElement',
+              argument: restArgumentNode('var [rest] = source;'),
+            },
+          ],
+        };
+        assertThrows(() => parseCustomScript(entry, nestedCatch), SyntaxError);
+      }
+    },
+  },
+  {
     name: 'catch parameters admit ES2015 array and object binding patterns',
     run() {
       for (const source of [
