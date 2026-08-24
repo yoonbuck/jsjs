@@ -3737,6 +3737,143 @@ export default [
     },
   },
   {
+    name: 'ES2015 audit uses canonical feature order for named promotions while T0 preserves source order',
+    run: async () => {
+      const promotion = JSON.parse(AUDIT_PROMOTION);
+      promotion.entries[0].features = ['alpha', 'zeta'];
+      const m1Promotion = JSON.stringify({
+        ...JSON.parse(AUDIT_M1_PROMOTION),
+        entries: [
+          {
+            path: AUDIT_M1_PATH,
+            variants: 2,
+            features: ['m1-a-feature', 'm1-z-feature'],
+            includeFeatures: ['m1-include-feature'],
+          },
+        ],
+      });
+      const p1cPromotion = JSON.stringify({
+        ...JSON.parse(AUDIT_P1C_PROMOTION),
+        entries: [
+          {
+            path: AUDIT_P1C_PATH,
+            variants: 2,
+            features: ['p1c-a-feature', 'p1c-z-feature'],
+            includeFeatures: ['p1c-include-feature'],
+          },
+        ],
+      });
+      const roots = new Map(AUDIT_ROOTS);
+      roots.set(
+        AUDIT_PROMOTION_PATH,
+        '/*---\ndescription: T0 feature-order fixture.\nes6id: 13.2\nfeatures: [zeta, alpha]\n---*/\n',
+      );
+      roots.set(
+        AUDIT_M1_PATH,
+        '/*---\ndescription: M1 promotion fixture.\nes6id: 26.1\nfeatures: [m1-z-feature, m1-a-feature]\nincludes: [m1Helper.js]\n---*/\n',
+      );
+      roots.set(
+        AUDIT_P1C_PATH,
+        '/*---\ndescription: P1C promotion fixture.\nes6id: 13.15\nfeatures: [p1c-z-feature, p1c-a-feature]\nincludes: [p1cHelper.js]\n---*/\n',
+      );
+      const dependencies = auditDependencies({
+        roots,
+        subset: JSON.stringify({
+          version: 1,
+          repository: AUDIT_PIN.repository,
+          revision: AUDIT_PIN.revision,
+          groups: [
+            {
+              name: 'es2015/audit-passing-promotion',
+              summary: 'An exact reviewed promotion fixture root.',
+              paths: [AUDIT_PROMOTION_PATH],
+            },
+            {
+              name: 'es2015/m1-reflect',
+              summary: 'An exact M1 promotion fixture root.',
+              paths: [AUDIT_M1_PATH],
+            },
+            {
+              name: 'es2015/p1c-catch-binding',
+              summary: 'An exact P1C promotion fixture root.',
+              paths: [AUDIT_P1C_PATH],
+            },
+            {
+              name: 'fixture',
+              summary: 'A selected fixture root.',
+              paths: ['test/language/selected.js'],
+            },
+          ],
+        }),
+        promotion: JSON.stringify(promotion),
+        auditEvidence: auditEvidence({
+          auditRecords: [
+            ...AUDIT_RECORDS,
+            ...AUDIT_M1_RECORDS,
+            ...AUDIT_P1C_RECORDS,
+          ],
+        }),
+        includeDefinitions: new Map([
+          ['m1Helper.js', { features: ['m1-include-feature'], includes: [] }],
+          ['p1cHelper.js', { features: ['p1c-include-feature'], includes: [] }],
+        ]),
+        files: new Map([
+          [
+            'tools/test262/es2015-policy.json',
+            JSON.stringify({
+              ...JSON.parse(POLICY),
+              es2015Features: [
+                'alpha',
+                'let',
+                'm1-a-feature',
+                'm1-z-feature',
+                'p1c-a-feature',
+                'p1c-z-feature',
+                'zeta',
+              ],
+              neutralFeatures: [
+                'cross-realm',
+                'm1-include-feature',
+                'p1c-include-feature',
+              ],
+            }),
+          ],
+          ['tools/test262/es2015-m1-promotion.json', m1Promotion],
+          ['tools/test262/es2015-p1c-promotion.json', p1cPromotion],
+          ['docs/conformance.md', AUDIT_COVERAGE_DOCUMENT],
+        ]),
+      });
+
+      assertSame(
+        await auditEs2015Taxonomy(['--sync-promoted-report'], dependencies),
+        0,
+      );
+      const records = fixtureOutput(dependencies, 'docs/test262-report.jsonl')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+        .filter(
+          (record) => record.type === 'test' && record.variant === 'non-strict',
+        );
+      const featuresByPath = new Map(
+        records.map((record) => [record.file, record.features]),
+      );
+
+      assertSame(
+        JSON.stringify(featuresByPath.get(AUDIT_PROMOTION_PATH)),
+        '["zeta","alpha"]',
+      );
+      assertSame(
+        JSON.stringify(featuresByPath.get(AUDIT_M1_PATH)),
+        '["m1-a-feature","m1-z-feature"]',
+      );
+      assertSame(
+        JSON.stringify(featuresByPath.get(AUDIT_P1C_PATH)),
+        '["p1c-a-feature","p1c-z-feature"]',
+      );
+    },
+  },
+  {
     name: 'ES2015 audit replaces stale promoted report details with immutable evidence',
     run: async () => {
       const dependencies = auditDependencies({
