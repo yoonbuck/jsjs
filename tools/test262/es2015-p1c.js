@@ -27,8 +27,10 @@ import {
   P1C_COLLATERAL_BASE_CLASSIFICATIONS,
   P1C_COLLATERAL_BLOCKED_CLASSIFICATIONS,
   P1C_COLLATERAL_PATHS,
+  P1C_CORRECTED_APPLIED_RECORD_SHA256,
 } from './es2015-p1c-collateral.js';
 import { serializeUpstreamSubset } from './es5-selection.js';
+import { canonicalRoadmapAuthoritySha256 } from './es2015-provenance.js';
 import {
   buildEs2015Inventory,
   summarizeEs2015Classification,
@@ -332,6 +334,17 @@ export function reconstructAppliedP1CSourceTaxonomy(options) {
       throw new Error(`Focused P1C applied taxonomy drift: ${source.path}`);
     }
     baselineByPath.set(source.path, source);
+  }
+  let appliedAuthoritySha256 = null;
+  try {
+    appliedAuthoritySha256 = canonicalRoadmapAuthoritySha256(authority);
+  } catch {
+    appliedAuthoritySha256 = null;
+  }
+  if (appliedAuthoritySha256 !== P1C_CORRECTED_APPLIED_RECORD_SHA256) {
+    throw new Error(
+      'Focused P1C execution requires the exact corrected applied P1C authority',
+    );
   }
   return {
     ...taxonomy,
@@ -1133,6 +1146,11 @@ export async function resolveP1COutputPath(repositoryRootUrl, outputPath) {
  *   readRoot?: (path: string) => Promise<string>,
  *   readIncludeDefinitions?: () => Promise<ReadonlyMap<string, unknown> | Record<string, unknown>>,
  *   runCollateralFocused?: typeof runP1CCollateralFocused,
+ *   readTaxonomyText?: () => Promise<string>,
+ *   readAuditEvidenceText?: () => Promise<string>,
+ *   readSubsetText?: () => Promise<string>,
+ *   readReportText?: () => Promise<string>,
+ *   readConformanceText?: () => Promise<string>,
  * }} [dependencies]
  */
 export async function main(argv = [], dependencies = {}) {
@@ -1300,6 +1318,11 @@ function writeP1CExecutionSummary(document) {
  *   readIncludeDefinitions?: () => Promise<ReadonlyMap<string, unknown> | Record<string, unknown>>,
  *   environment?: Record<string, string | undefined>,
  *   runCollateralFocused?: typeof runP1CCollateralFocused,
+ *   readTaxonomyText?: () => Promise<string>,
+ *   readAuditEvidenceText?: () => Promise<string>,
+ *   readSubsetText?: () => Promise<string>,
+ *   readReportText?: () => Promise<string>,
+ *   readConformanceText?: () => Promise<string>,
  * }} dependencies
  */
 async function buildP1CScratch(options, dependencies) {
@@ -1339,11 +1362,16 @@ async function buildP1CScratch(options, dependencies) {
   ] = await Promise.all([
     readFile(ledgerPath, 'utf8'),
     readFile(executionPath, 'utf8'),
-    readFile(taxonomyPath, 'utf8'),
-    readFile(auditPath, 'utf8'),
-    readFile(subsetPath, 'utf8'),
-    readFile(reportPath, 'utf8'),
-    readFile(conformancePath, 'utf8'),
+    (dependencies.readTaxonomyText ?? (() => readFile(taxonomyPath, 'utf8')))(),
+    (
+      dependencies.readAuditEvidenceText ?? (() => readFile(auditPath, 'utf8'))
+    )(),
+    (dependencies.readSubsetText ?? (() => readFile(subsetPath, 'utf8')))(),
+    (dependencies.readReportText ?? (() => readFile(reportPath, 'utf8')))(),
+    (
+      dependencies.readConformanceText ??
+      (() => readFile(conformancePath, 'utf8'))
+    )(),
     readFile(featuresPath, 'utf8'),
   ]);
   const execution = JSON.parse(executionText);

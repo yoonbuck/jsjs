@@ -503,6 +503,38 @@ export default [
         ).message,
         `Focused P1C applied taxonomy drift: ${sourcePath}`,
       );
+
+      const noncanonicalIssue = provenanceMatching({
+        mutate: (authority) => {
+          authority.issue = 999;
+        },
+      });
+      assertSame(
+        assertThrows(
+          () => reconstruct({ ...options, provenanceText: noncanonicalIssue }),
+          Error,
+        ).message,
+        'Focused P1C execution requires the exact corrected applied P1C authority',
+      );
+      const noncanonicalProtectedOutput = provenanceMatching({
+        mutate: (authority) => {
+          const addExact = authority.protectedOutputs.find(
+            (/** @type {any} */ entry) => entry.operation === 'add-exact',
+          );
+          addExact.headSha256 = sha256('p1c-protected-output-drift');
+        },
+      });
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              provenanceText: noncanonicalProtectedOutput,
+            }),
+          Error,
+        ).message,
+        'Focused P1C execution requires the exact corrected applied P1C authority',
+      );
     },
   },
   {
@@ -1486,19 +1518,22 @@ export default [
     name: 'P1C build-scratch does not reuse applied outputs as a new authority base',
     run: async () => {
       const { main } = await loadP1C();
-      const inputs = await readP1CProjectionInputs();
-      const taxonomy = JSON.parse(inputs.taxonomyText);
+      const trackedTaxonomy = JSON.parse(
+        await readFile(
+          new URL('tools/test262/es2015-taxonomy.json', REPOSITORY_ROOT),
+          'utf8',
+        ),
+      );
       const fixturePath = `.superpowers/test/es2015-p1c-${randomUUID()}`;
       const fixtureUrl = new URL(`${fixturePath}/`, REPOSITORY_ROOT);
       const executionPath = `${fixturePath}/unit-execution.json`;
       const outputPath = `${fixturePath}/unit-authority`;
-      const sourceByPath = syntheticP1CSources(inputs.ledgerText, taxonomy);
       const message = await (async () => {
         await mkdir(fixtureUrl, { recursive: true });
         try {
           await writeFile(
             new URL('unit-execution.json', fixtureUrl),
-            renderP1CJson(syntheticP1CExecution(inputs.ledgerText, taxonomy)),
+            renderP1CJson({ version: 1, records: [] }),
             'utf8',
           );
           try {
@@ -1512,24 +1547,13 @@ export default [
               {
                 environment: { TZ: 'UTC' },
                 readPin: async () => ({
-                  repository: taxonomy.pin.repository,
-                  revision: taxonomy.pin.revision,
+                  repository: trackedTaxonomy.pin.repository,
+                  revision: trackedTaxonomy.pin.revision,
                   checkoutPath: 'vendor/test262',
                 }),
                 assertPinnedCheckout: async () => {},
-                readRoot: async (sourcePath) => {
-                  const source = sourceByPath.get(sourcePath);
-                  if (source === undefined) {
-                    throw new Error(
-                      `missing synthetic P1C source ${sourcePath}`,
-                    );
-                  }
-                  return source;
-                },
                 readIncludeDefinitions: async () =>
                   syntheticP1CIncludeDefinitions(),
-                runCollateralFocused: async () =>
-                  syntheticP1CCollateralExecution(),
               },
             );
           } catch (error) {
@@ -1544,6 +1568,184 @@ export default [
       assertSame(
         message,
         'P1C BASE classification mismatch: test/language/statements/try/dstr/ary-init-iter-close.js',
+      );
+    },
+  },
+  {
+    name: 'P1C build-scratch projects the repaired-BASE inputs into the exact pending bundle',
+    run: async () => {
+      const { main, P1C } = await loadP1C();
+      const inputs = await readP1CProjectionInputs();
+      const taxonomy = JSON.parse(inputs.taxonomyText);
+      const sourceByPath = syntheticP1CSources(inputs.ledgerText, taxonomy);
+      const collateralExecution = syntheticP1CCollateralExecution();
+      const fixturePath = `.superpowers/test/es2015-p1c-${randomUUID()}`;
+      const fixtureUrl = new URL(`${fixturePath}/`, REPOSITORY_ROOT);
+      const executionPath = `${fixturePath}/scratch-execution.json`;
+      const outputPath = `${fixturePath}/scratch-authority`;
+      const bundleUrl = new URL(
+        `${fixturePath}/scratch-authority/`,
+        REPOSITORY_ROOT,
+      );
+      const readBundle = async (/** @type {string} */ relative) =>
+        readFile(new URL(relative, bundleUrl), 'utf8');
+      const bundle = await (async () => {
+        await mkdir(fixtureUrl, { recursive: true });
+        try {
+          await writeFile(
+            new URL('scratch-execution.json', fixtureUrl),
+            renderP1CJson(syntheticP1CExecution(inputs.ledgerText, taxonomy)),
+            'utf8',
+          );
+          const status = await main(
+            [
+              '--build-scratch',
+              '--ledger=tools/test262/es2015-p1c-paths.txt',
+              `--execution=${executionPath}`,
+              `--output=${outputPath}`,
+            ],
+            {
+              environment: { TZ: 'UTC' },
+              readPin: async () => ({
+                repository: taxonomy.pin.repository,
+                revision: taxonomy.pin.revision,
+                checkoutPath: 'vendor/test262',
+              }),
+              assertPinnedCheckout: async () => {},
+              readRoot: async (sourcePath) => {
+                const source = sourceByPath.get(sourcePath);
+                if (source === undefined) {
+                  throw new Error(`missing synthetic P1C source ${sourcePath}`);
+                }
+                return source;
+              },
+              readIncludeDefinitions: async () =>
+                syntheticP1CIncludeDefinitions(),
+              runCollateralFocused: async () => collateralExecution,
+              readTaxonomyText: async () => inputs.taxonomyText,
+              readAuditEvidenceText: async () => inputs.auditEvidenceText,
+              readSubsetText: async () => inputs.subsetText,
+              readReportText: async () => inputs.reportText,
+              readConformanceText: async () => inputs.conformanceText,
+            },
+          );
+          assertSame(status, 0);
+          const summary = JSON.parse(await readBundle('summary.json'));
+          /** @type {Record<string, string>} */
+          const files = {};
+          for (const file of Object.keys(summary.fileSha256)) {
+            files[file] = await readBundle(file);
+          }
+          return {
+            summary,
+            files,
+            authority: JSON.parse(await readBundle('authority-record.json')),
+            protectedProjection: JSON.parse(
+              await readBundle('protected-projection.json'),
+            ),
+            collateralText: await readBundle('collateral-execution.json'),
+          };
+        } finally {
+          await rm(fixtureUrl, { recursive: true, force: true });
+        }
+      })();
+
+      const expectedFiles = [
+        'authority-record.json',
+        'collateral-execution.json',
+        'evidence/es2015-p1c-baseline.json',
+        'evidence/es2015-p1c-disposition.json',
+        'evidence/es2015-p1c-owner-deltas.json',
+        'evidence/es2015-p1c-owner-map.json',
+        'evidence/es2015-p1c-paths.json',
+        'evidence/es2015-p1c-promotion.json',
+        'projected/docs/conformance.md',
+        'projected/docs/test262-report.jsonl',
+        'projected/tools/test262/es2015-audit-evidence.json',
+        'projected/tools/test262/es2015-taxonomy.json',
+        'projected/tools/test262/upstream-subset.json',
+        'protected-projection.json',
+      ];
+      assertSame(
+        JSON.stringify(Object.keys(bundle.summary.fileSha256).sort()),
+        JSON.stringify(expectedFiles),
+      );
+      for (const [file, text] of Object.entries(bundle.files)) {
+        assertSame(bundle.summary.fileSha256[file], sha256(text));
+      }
+      assertSame(typeof bundle.summary.fileSha256['summary.json'], 'undefined');
+
+      assertSame(bundle.summary.version, 1);
+      assertSame(bundle.summary.ledger.roots, P1C.roots);
+      assertSame(bundle.summary.ledger.variants, P1C.variants);
+      assertSame(bundle.summary.ledger.sha256, inputs.ledgerSha256);
+      assertSame(bundle.summary.outcome.completePassRoots, 81);
+      assertSame(bundle.summary.outcome.completePassVariants, 161);
+      assertSame(bundle.summary.outcome.residualRoots, 0);
+      assertSame(bundle.summary.outcome.residualVariants, 0);
+      assertSame(bundle.summary.collateral.roots, P1C_COLLATERAL_PATHS.length);
+      assertSame(
+        bundle.summary.collateral.variants,
+        collateralExecution.records.length,
+      );
+      assertSame(
+        bundle.summary.collateral.failed,
+        collateralExecution.records.length,
+      );
+      assertSame(
+        bundle.summary.collateral.sha256,
+        sha256(renderP1CJson(collateralExecution)),
+      );
+      assertSame(bundle.collateralText, renderP1CJson(collateralExecution));
+
+      assertSame(
+        bundle.summary.authoritySha256,
+        sha256(`${JSON.stringify(bundle.authority)}\n`),
+      );
+      assertSame(
+        bundle.summary.protectedProjectionSha256,
+        sha256(`${JSON.stringify(bundle.protectedProjection)}\n`),
+      );
+      assertSame(
+        canonicalRoadmapAuthoritySha256(bundle.authority),
+        '95036226ee50e365b03c823bab751c6e1d646af0d5c6352a199cd442e2aa9278',
+      );
+      assertSame(
+        roadmapAggregateProjectionSha256(bundle.authority),
+        '6e92772f4eb42ecaef7f673f243ecdd689b73bc1e9a7a3a545150c2f8630a813',
+      );
+      const appliedAuthority = structuredClone(bundle.authority);
+      appliedAuthority.state = 'applied';
+      assertSame(
+        canonicalRoadmapAuthoritySha256(appliedAuthority),
+        P1C_CORRECTED_APPLIED_RECORD_SHA256,
+      );
+
+      assertSame(
+        bundle.summary.fileSha256[
+          'projected/tools/test262/es2015-audit-evidence.json'
+        ],
+        '50f9a54346d0e9e5168a6ac6b0b8de6d709e2c5b808d6c8b036e5113612e638c',
+      );
+      assertSame(
+        bundle.summary.fileSha256[
+          'projected/tools/test262/es2015-taxonomy.json'
+        ],
+        'fdf3c8bf229f6c841209e4c4a2196001d45cf0a1c270f334cf06e5f54a00f3c7',
+      );
+      assertSame(
+        bundle.summary.fileSha256[
+          'projected/tools/test262/upstream-subset.json'
+        ],
+        '5a5b83b3c28991c5f2ac141ed949a9698966cce85587d671a4417228d5e08b14',
+      );
+      assertSame(
+        bundle.summary.fileSha256['projected/docs/test262-report.jsonl'],
+        '89002c4b597748a53ccc4ea60df25d981660f4311cee1e933f95fd13b39e69ff',
+      );
+      assertSame(
+        bundle.summary.fileSha256['projected/docs/conformance.md'],
+        '9cc4250ed8a69e7d62e82ad7452bb2563c319856ed97a53bd00b96d0017c6cfe',
       );
     },
   },
