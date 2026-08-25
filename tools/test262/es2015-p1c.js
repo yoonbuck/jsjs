@@ -30,7 +30,10 @@ import {
   P1C_CORRECTED_APPLIED_RECORD_SHA256,
 } from './es2015-p1c-collateral.js';
 import { serializeUpstreamSubset } from './es5-selection.js';
-import { canonicalRoadmapAuthoritySha256 } from './es2015-provenance.js';
+import {
+  canonicalRoadmapAuthoritySha256,
+  parseEs2015ProvenanceManifest,
+} from './es2015-provenance.js';
 import {
   buildEs2015Inventory,
   summarizeEs2015Classification,
@@ -244,10 +247,16 @@ export function verifyP1CLedger(text, taxonomy) {
  * }} options
  */
 export function reconstructAppliedP1CSourceTaxonomy(options) {
-  const manifest = JSON.parse(options.provenanceText);
-  const authority = manifest.roadmapAuthorities?.find(
+  let manifest;
+  try {
+    manifest = parseEs2015ProvenanceManifest(options.provenanceText);
+  } catch {
+    throw new Error('Focused P1C execution requires the applied P1C authority');
+  }
+  const p1cAuthorities = (manifest.roadmapAuthorities ?? []).filter(
     (/** @type {any} */ entry) => entry.code === 'P1C',
   );
+  const authority = p1cAuthorities.length === 1 ? p1cAuthorities[0] : undefined;
   if (
     authority === undefined ||
     authority.state !== 'applied' ||

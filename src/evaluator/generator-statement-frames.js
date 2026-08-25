@@ -27,7 +27,10 @@ import {
   blockDeclarationInstantiation,
   evaluateNamedExpression,
 } from './declarations.js';
-import { createCatchClauseContext } from './catch-binding.js';
+import {
+  createCatchClauseContext,
+  createCatchClauseEnvironment,
+} from './catch-binding.js';
 import { evaluateExpressionValue } from './expressions.js';
 import {
   createGeneratorExpressionFrame,
@@ -212,7 +215,7 @@ import {
  *   kind: 'try',
  *   node: any,
  *   context: EvaluationContext,
- *   phase: 'try' | 'catch' | 'finally' | 'resume-pending',
+ *   phase: 'try' | 'catch' | 'catch-binding' | 'finally' | 'resume-pending',
  *   pending: Completion | null,
  *   catchContext: EvaluationContext | null,
  *   waiting: boolean,
@@ -1840,6 +1843,30 @@ function dispatchWith(execution, frame) {
  * @returns {GeneratorFrameAction}
  */
 function dispatchTry(execution, frame) {
+  if (frame.phase === 'catch-binding') {
+    const result = takeGeneratorOutput(execution);
+    frame.waiting = false;
+
+    if (result.type === 'completion') {
+      frame.pending = result.completion;
+      return startTryFinallyOrResume(frame);
+    }
+
+    if (result.type !== 'value') {
+      throw new TypeError('Catch binding pattern did not complete');
+    }
+
+    frame.phase = 'catch';
+    frame.waiting = true;
+    return {
+      type: 'push',
+      frame: createGeneratorStatementFrame(
+        frame.node.handler.body,
+        requireCatchContext(frame),
+      ),
+    };
+  }
+
   if (!frame.waiting) {
     if (frame.phase === 'resume-pending') {
       return completionAction(requirePendingCompletion(frame));
@@ -1863,6 +1890,37 @@ function dispatchTry(execution, frame) {
 
   if (frame.phase === 'try') {
     if (completion.type === 'throw' && frame.node.handler !== null) {
+      const param = frame.node.handler.param;
+
+      if (param !== null && generatorContainsYield(param, frame.context)) {
+        const prepared = captureGeneratorOperation(execution.realm, () =>
+          createCatchClauseEnvironment(param, frame.context),
+        );
+
+        if (prepared.type === 'completion') {
+          frame.pending = prepared.completion;
+          return startTryFinallyOrResume(frame);
+        }
+
+        if (prepared.type !== 'value') {
+          throw new TypeError('Catch environment must produce a context value');
+        }
+
+        const environment = /** @type {any} */ (prepared.value);
+        frame.catchContext = environment.catchContext;
+        frame.phase = 'catch-binding';
+        frame.waiting = true;
+        return {
+          type: 'push',
+          frame: createGeneratorPatternFrame(
+            param,
+            completion.value,
+            environment.catchContext,
+            { kind: 'binding-initialization', env: environment.catchEnv },
+          ),
+        };
+      }
+
       const prepared = prepareCatchClause(execution, frame, completion.value);
 
       if (prepared !== null) {

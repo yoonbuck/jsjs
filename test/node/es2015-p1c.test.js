@@ -535,6 +535,24 @@ export default [
         ).message,
         'Focused P1C execution requires the exact corrected applied P1C authority',
       );
+      const duplicateP1CAuthority = provenanceMatching({
+        mutate: (authority, manifest) => {
+          const conflicting = structuredClone(authority);
+          conflicting.state = 'pending';
+          manifest.roadmapAuthorities.push(conflicting);
+        },
+      });
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              provenanceText: duplicateP1CAuthority,
+            }),
+          Error,
+        ).message,
+        'Focused P1C execution requires the applied P1C authority',
+      );
     },
   },
   {

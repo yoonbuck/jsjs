@@ -303,6 +303,105 @@ const tests = [
       );
     },
   },
+  {
+    name: 'generator catch parameter default initializer suspends on yield',
+    run() {
+      assertSame(
+        value(`
+          function* g() {
+            try { throw []; }
+            catch ([a = yield 'need']) { yield 'have:' + a; }
+          }
+          var it = g();
+          var first = it.next();
+          var second = it.next(41);
+          var third = it.next();
+          [first.value, first.done, second.value, second.done, third.done].join('|');
+        `),
+        'need|false|have:41|false|true',
+      );
+    },
+  },
+  {
+    name: 'generator catch parameter computed key suspends on yield',
+    run() {
+      assertSame(
+        value(`
+          function* g() {
+            try { throw { picked: 'P' }; }
+            catch ({ [yield 'key']: a }) { yield 'have:' + a; }
+          }
+          var it = g();
+          var first = it.next();
+          var second = it.next('picked');
+          [first.value, second.value].join('|');
+        `),
+        'key|have:P',
+      );
+    },
+  },
+  {
+    name: 'injected return at a catch parameter yield bypasses the catch body and runs finally',
+    run() {
+      assertSame(
+        value(`
+          var log = [];
+          function* g() {
+            try { throw []; }
+            catch ([a = yield 'need']) { log.push('catch:' + a); }
+            finally { log.push('finally'); }
+          }
+          var it = g();
+          var first = it.next();
+          var returned = it.return('done');
+          [first.value, log.join(','), returned.value, returned.done].join('|');
+        `),
+        'need|finally|done|true',
+      );
+    },
+  },
+  {
+    name: 'injected throw at a catch parameter yield propagates past the catch body through finally',
+    run() {
+      assertSame(
+        value(`
+          var log = [];
+          var outcome;
+          function* g() {
+            try { throw []; }
+            catch ([a = yield 'need']) { log.push('catch'); }
+            finally { log.push('finally'); }
+          }
+          var it = g();
+          it.next();
+          try { it.throw('boom'); } catch (error) { outcome = 'propagated:' + error; }
+          [log.join(','), outcome].join('|');
+        `),
+        'finally|propagated:boom',
+      );
+    },
+  },
+  {
+    name: 'generator catch parameter yield reports a Realm-owned abrupt completion when binding fails',
+    run() {
+      assertSame(
+        value(`
+          var log = [];
+          function* g() {
+            try {
+              try { throw 5; }
+              catch ([a = yield 'need']) { log.push('inner-catch'); }
+              finally { log.push('inner-finally'); }
+            } catch (error) {
+              return [error instanceof TypeError, log.join(',')].join('|');
+            }
+          }
+          g().next().value;
+        `),
+        'true|inner-finally',
+      );
+    },
+  },
 ];
 
 export default tests;
