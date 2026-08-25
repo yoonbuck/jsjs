@@ -2099,12 +2099,14 @@ export default [
           'utf8',
         ),
       );
-      const pendingAuthority = globalThis.structuredClone(
-        manifest.roadmapAuthorities.find(
-          (/** @type {any} */ entry) => entry.code === 'P1C',
-        ),
+      const appliedManifestAuthority = manifest.roadmapAuthorities.find(
+        (/** @type {any} */ entry) => entry.code === 'P1C',
       );
-      const authority = globalThis.structuredClone(pendingAuthority);
+      const pendingAuthority = globalThis.structuredClone(
+        appliedManifestAuthority,
+      );
+      pendingAuthority.state = 'pending';
+      const authority = globalThis.structuredClone(appliedManifestAuthority);
       authority.state = 'applied';
       const taxonomy = {
         classifications: [
@@ -2262,6 +2264,8 @@ export default [
       assertSame(
         JSON.stringify(evidenceReads),
         JSON.stringify([
+          'tools/test262/es2015-p1c-baseline.json',
+          'tools/test262/es2015-p1c-disposition.json',
           'tools/test262/es2015-m1-baseline.json',
           'tools/test262/es2015-m1-disposition.json',
           'tools/test262/es2015-m0-baseline.json',

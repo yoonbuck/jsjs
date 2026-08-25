@@ -425,6 +425,19 @@ The evaluator lives in `src/evaluator/` and is split by concern:
 | `dynamic-function.js` | The `Function` constructor's body parsing                                                                                                                                                           |
 | `index.js`            | Re-exports for the evaluator's public surface                                                                                                                                                       |
 
+Catch clauses share one binding-environment kernel in
+`src/evaluator/catch-binding.js`. `createCatchClauseContext` creates a fresh
+declarative environment over the surrounding context, creates every
+`boundNames(param)` binding before initialization, marks the record as a catch
+environment, and delegates identifier or destructuring initialization to
+`initializeBindingPattern`. The synchronous statement evaluator adapts errors
+through `runToCompletion`, while the generator statement machine adapts the
+same kernel through `captureGeneratorOperation`; both therefore preserve the
+same abrupt-completion, iterator-closing, scope, and Realm behavior without
+duplicating catch binding semantics. The P1C parser correctly rejects ES2016
+nested binding-rest patterns, so those collateral roots stay outside the
+selected ES2015 corpus.
+
 `declarations.js` drives four instantiation paths, all reading their names from
 `static-semantics.js`: `globalDeclarationInstantiation` for a script,
 `functionDeclarationInstantiation` when a function activates,

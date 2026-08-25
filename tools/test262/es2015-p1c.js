@@ -57,6 +57,9 @@ const SUBSET_FILE = 'tools/test262/upstream-subset.json';
 const REPORT_FILE = 'docs/test262-report.jsonl';
 const CONFORMANCE_FILE = 'docs/conformance.md';
 const FEATURES_FILE = 'tools/test262/features.json';
+const PROVENANCE_FILE = 'tools/test262/es2015-provenance.json';
+const P1C_BASELINE_FILE = 'tools/test262/es2015-p1c-baseline.json';
+const P1C_DISPOSITION_FILE = 'tools/test262/es2015-p1c-disposition.json';
 const P1C_BLOCKER = 'early-errors-and-declaration-instantiation';
 const P1C_PATH_PATTERN = /^test\/language\/statements\/try\/.+\.js$/u;
 const P1C_COMPARE_ARRAY_INCLUDES = Object.freeze(['compareArray.js']);
@@ -69,8 +72,8 @@ const P1C_FEATURE_PROFILE_COUNTS = Object.freeze({
   '["let"]': 1,
 });
 const P1C_EVIDENCE_PATHS = Object.freeze([
-  'tools/test262/es2015-p1c-baseline.json',
-  'tools/test262/es2015-p1c-disposition.json',
+  P1C_BASELINE_FILE,
+  P1C_DISPOSITION_FILE,
   'tools/test262/es2015-p1c-owner-deltas.json',
   'tools/test262/es2015-p1c-owner-map.json',
   'tools/test262/es2015-p1c-paths.json',
@@ -222,6 +225,120 @@ export function verifyP1CLedger(text, taxonomy) {
     throw new Error('P1C taxonomy variants do not match the reviewed ledger');
   }
   return paths;
+}
+
+/**
+ * Reverses the applied P1C source classifications back to their reviewed BASE
+ * blocked form so the focused runner can execute against the tracked applied
+ * taxonomy. Only the 81 P1C source roots are reversed; the four collateral
+ * roots remain in their current blocked classification because they are not
+ * part of the reviewed source ledger.
+ *
+ * @param {{
+ *   taxonomyText: string,
+ *   baselineText: string,
+ *   dispositionText: string,
+ *   provenanceText: string,
+ * }} options
+ */
+export function reconstructAppliedP1CSourceTaxonomy(options) {
+  const manifest = JSON.parse(options.provenanceText);
+  const authority = manifest.roadmapAuthorities?.find(
+    (/** @type {any} */ entry) => entry.code === 'P1C',
+  );
+  if (
+    authority === undefined ||
+    authority.state !== 'applied' ||
+    authority.reconciliation !== null
+  ) {
+    throw new Error('Focused P1C execution requires the applied P1C authority');
+  }
+  const evidenceByPath = new Map(
+    authority.evidence.map((/** @type {any} */ entry) => [entry.path, entry]),
+  );
+  if (
+    sha256(options.baselineText) !==
+      evidenceByPath.get(P1C_BASELINE_FILE)?.sha256 ||
+    sha256(options.dispositionText) !==
+      evidenceByPath.get(P1C_DISPOSITION_FILE)?.sha256
+  ) {
+    throw new Error('Focused P1C execution evidence does not match authority');
+  }
+
+  const baseline = JSON.parse(options.baselineText);
+  const disposition = JSON.parse(options.dispositionText);
+  const destinations = disposition?.destinations;
+  if (
+    !Array.isArray(baseline) ||
+    !Array.isArray(destinations) ||
+    baseline.length !== P1C.roots ||
+    destinations.length !== P1C.roots
+  ) {
+    throw new Error('Focused P1C execution evidence has the wrong root count');
+  }
+  const paths = baseline.map((/** @type {any} */ entry) => entry.path);
+  if (
+    authority.source.rootCount !== P1C.roots ||
+    authority.source.variantCount !== P1C.variants ||
+    authority.source.pathSha256 !== P1C.sha256 ||
+    paths.some(
+      (/** @type {string} */ sourcePath, /** @type {number} */ index) =>
+        destinations[index]?.path !== sourcePath ||
+        destinations[index]?.status !== 'selected-passing' ||
+        destinations[index]?.blocker !== null ||
+        destinations[index]?.issue !== P1C_ISSUE_NUMBER,
+    ) ||
+    sha256(`${paths.join('\n')}\n`) !== P1C.sha256 ||
+    baseline.reduce(
+      (/** @type {number} */ total, /** @type {any} */ entry) =>
+        total + entry.variants,
+      0,
+    ) !== P1C.variants
+  ) {
+    throw new Error(
+      'Focused P1C execution evidence has the wrong source identity',
+    );
+  }
+
+  const taxonomy = JSON.parse(options.taxonomyText);
+  if (!Array.isArray(taxonomy.classifications)) {
+    throw new Error('Focused P1C execution requires taxonomy classifications');
+  }
+  const currentByPath = new Map(
+    taxonomy.classifications.map((/** @type {any} */ entry) => [
+      entry.path,
+      entry,
+    ]),
+  );
+  const baselineByPath = new Map();
+  for (let index = 0; index < baseline.length; index += 1) {
+    const source = baseline[index];
+    const destination = destinations[index];
+    const current = currentByPath.get(source.path);
+    if (
+      current === undefined ||
+      current.status !== destination.status ||
+      current.blocker !== destination.blocker
+    ) {
+      throw new Error(`Focused P1C applied taxonomy mismatch: ${source.path}`);
+    }
+    const stableSource = { ...source };
+    const stableCurrent = { ...current };
+    Reflect.deleteProperty(stableSource, 'status');
+    Reflect.deleteProperty(stableSource, 'blocker');
+    Reflect.deleteProperty(stableCurrent, 'status');
+    Reflect.deleteProperty(stableCurrent, 'blocker');
+    if (JSON.stringify(stableSource) !== JSON.stringify(stableCurrent)) {
+      throw new Error(`Focused P1C applied taxonomy drift: ${source.path}`);
+    }
+    baselineByPath.set(source.path, source);
+  }
+  return {
+    ...taxonomy,
+    classifications: taxonomy.classifications.map(
+      (/** @type {any} */ entry) => baselineByPath.get(entry.path) ?? entry,
+    ),
+  };
 }
 
 /**
@@ -1077,21 +1194,46 @@ function parseP1COptions(argv) {
  * @param {Record<string, string | undefined>} environment
  */
 async function executeP1CCorpus(options, environment) {
-  const [ledgerPath, taxonomyPath, featuresPath, outputPath] =
-    await Promise.all([
-      resolveP1CInputPath(REPOSITORY_ROOT_URL, options.ledger),
-      resolveP1CInputPath(REPOSITORY_ROOT_URL, TAXONOMY_FILE),
-      resolveP1CInputPath(REPOSITORY_ROOT_URL, FEATURES_FILE),
-      resolveP1COutputPath(REPOSITORY_ROOT_URL, options.output),
-    ]);
+  const [
+    ledgerPath,
+    taxonomyPath,
+    baselinePath,
+    dispositionPath,
+    provenancePath,
+    featuresPath,
+    outputPath,
+  ] = await Promise.all([
+    resolveP1CInputPath(REPOSITORY_ROOT_URL, options.ledger),
+    resolveP1CInputPath(REPOSITORY_ROOT_URL, TAXONOMY_FILE),
+    resolveP1CInputPath(REPOSITORY_ROOT_URL, P1C_BASELINE_FILE),
+    resolveP1CInputPath(REPOSITORY_ROOT_URL, P1C_DISPOSITION_FILE),
+    resolveP1CInputPath(REPOSITORY_ROOT_URL, PROVENANCE_FILE),
+    resolveP1CInputPath(REPOSITORY_ROOT_URL, FEATURES_FILE),
+    resolveP1COutputPath(REPOSITORY_ROOT_URL, options.output),
+  ]);
   const pin = await readTest262Pin(REPOSITORY_ROOT_URL);
   await assertPinnedCheckout(pin, REPOSITORY_ROOT_URL);
-  const [ledgerText, taxonomyText, featuresText] = await Promise.all([
+  const [
+    ledgerText,
+    taxonomyText,
+    baselineText,
+    dispositionText,
+    provenanceText,
+    featuresText,
+  ] = await Promise.all([
     readFile(ledgerPath, 'utf8'),
     readFile(taxonomyPath, 'utf8'),
+    readFile(baselinePath, 'utf8'),
+    readFile(dispositionPath, 'utf8'),
+    readFile(provenancePath, 'utf8'),
     readFile(featuresPath, 'utf8'),
   ]);
-  const taxonomy = JSON.parse(taxonomyText);
+  const taxonomy = reconstructAppliedP1CSourceTaxonomy({
+    taxonomyText,
+    baselineText,
+    dispositionText,
+    provenanceText,
+  });
   const supportedFeatures = featureNames(parseFeatureManifest(featuresText));
   const host = createNodeTest262Host({
     root: new URL(

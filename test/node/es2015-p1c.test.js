@@ -1,5 +1,7 @@
+import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { assertSame, assertThrows } from '../harness/assert.js';
 import { buildEs2015Inventory } from '../../tools/test262/es2015-taxonomy.js';
 import {
@@ -24,6 +26,8 @@ import {
 } from '../../tools/test262/upstream.js';
 
 const REPOSITORY_ROOT = new URL('../../', import.meta.url);
+const REPOSITORY_ROOT_PATH = fileURLToPath(REPOSITORY_ROOT);
+const P1C_CONSUMER_BASE = '968c0124cc5c3d63a19c3f926ed7857dfb3333ce';
 const { structuredClone } = globalThis;
 const EXPECTED_FEATURE_PROFILE_COUNTS = Object.freeze({
   '[]': 2,
@@ -233,6 +237,271 @@ export default [
         assertThrows(() => verifyP1CLedger(ledgerText, foreignPath), Error)
           .message,
         `P1C BASE classification mismatch: ${paths[0]}`,
+      );
+    },
+  },
+  {
+    name: 'applied P1C execution reconstruction rejects every source and taxonomy drift',
+    run: async () => {
+      const p1c = await loadP1C();
+      const reconstruct = p1c.reconstructAppliedP1CSourceTaxonomy;
+      assertSame(typeof reconstruct, 'function');
+      const [
+        ledgerText,
+        taxonomyText,
+        baselineText,
+        dispositionText,
+        provenanceText,
+      ] = await Promise.all(
+        [
+          'tools/test262/es2015-p1c-paths.txt',
+          'tools/test262/es2015-taxonomy.json',
+          'tools/test262/es2015-p1c-baseline.json',
+          'tools/test262/es2015-p1c-disposition.json',
+          'tools/test262/es2015-provenance.json',
+        ].map((file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8')),
+      );
+      const options = {
+        taxonomyText,
+        baselineText,
+        dispositionText,
+        provenanceText,
+      };
+      const BASELINE_FILE = 'tools/test262/es2015-p1c-baseline.json';
+      const DISPOSITION_FILE = 'tools/test262/es2015-p1c-disposition.json';
+
+      const source = reconstruct(options);
+      assertSame(p1c.verifyP1CLedger(ledgerText, source).length, p1c.P1C.roots);
+      const sourceByPath = new Map(
+        source.classifications.map((/** @type {any} */ entry) => [
+          entry.path,
+          entry,
+        ]),
+      );
+      assertSame(
+        JSON.stringify(
+          JSON.parse(baselineText).map((/** @type {any} */ entry) =>
+            sourceByPath.get(entry.path),
+          ),
+        ),
+        JSON.stringify(JSON.parse(baselineText)),
+      );
+
+      /**
+       * @param {{ baseline?: string, disposition?: string, mutate?: (authority: any, manifest: any) => void }} [overrides]
+       */
+      const provenanceMatching = ({
+        baseline = baselineText,
+        disposition = dispositionText,
+        mutate,
+      } = {}) => {
+        const manifest = JSON.parse(provenanceText);
+        const authority = manifest.roadmapAuthorities.find(
+          (/** @type {any} */ entry) => entry.code === 'P1C',
+        );
+        for (const entry of authority.evidence) {
+          if (entry.path === BASELINE_FILE) entry.sha256 = sha256(baseline);
+          if (entry.path === DISPOSITION_FILE) {
+            entry.sha256 = sha256(disposition);
+          }
+        }
+        if (mutate) mutate(authority, manifest);
+        return `${JSON.stringify(manifest, null, 2)}\n`;
+      };
+
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              provenanceText: provenanceMatching({
+                mutate: (authority) => {
+                  authority.state = 'pending';
+                },
+              }),
+            }),
+          Error,
+        ).message,
+        'Focused P1C execution requires the applied P1C authority',
+      );
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              provenanceText: provenanceMatching({
+                mutate: (authority) => {
+                  authority.reconciliation = {};
+                },
+              }),
+            }),
+          Error,
+        ).message,
+        'Focused P1C execution requires the applied P1C authority',
+      );
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              provenanceText: provenanceMatching({
+                mutate: (authority, manifest) => {
+                  manifest.roadmapAuthorities =
+                    manifest.roadmapAuthorities.filter(
+                      (/** @type {any} */ entry) => entry.code !== 'P1C',
+                    );
+                },
+              }),
+            }),
+          Error,
+        ).message,
+        'Focused P1C execution requires the applied P1C authority',
+      );
+
+      assertSame(
+        assertThrows(
+          () => reconstruct({ ...options, baselineText: `${baselineText} ` }),
+          Error,
+        ).message,
+        'Focused P1C execution evidence does not match authority',
+      );
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({ ...options, dispositionText: `${dispositionText} ` }),
+          Error,
+        ).message,
+        'Focused P1C execution evidence does not match authority',
+      );
+
+      const shortBaseline = renderP1CJson(
+        JSON.parse(baselineText).slice(0, p1c.P1C.roots - 1),
+      );
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              baselineText: shortBaseline,
+              provenanceText: provenanceMatching({ baseline: shortBaseline }),
+            }),
+          Error,
+        ).message,
+        'Focused P1C execution evidence has the wrong root count',
+      );
+      const shortDisposition = (() => {
+        const disposition = JSON.parse(dispositionText);
+        disposition.destinations = disposition.destinations.slice(
+          0,
+          p1c.P1C.roots - 1,
+        );
+        return renderP1CJson(disposition);
+      })();
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              dispositionText: shortDisposition,
+              provenanceText: provenanceMatching({
+                disposition: shortDisposition,
+              }),
+            }),
+          Error,
+        ).message,
+        'Focused P1C execution evidence has the wrong root count',
+      );
+
+      const pathDriftBaseline = (() => {
+        const baseline = JSON.parse(baselineText);
+        baseline[0] = { ...baseline[0], path: `${baseline[0].path}#drift` };
+        return renderP1CJson(baseline);
+      })();
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              baselineText: pathDriftBaseline,
+              provenanceText: provenanceMatching({
+                baseline: pathDriftBaseline,
+              }),
+            }),
+          Error,
+        ).message,
+        'Focused P1C execution evidence has the wrong source identity',
+      );
+      const variantDriftBaseline = (() => {
+        const baseline = JSON.parse(baselineText);
+        baseline[0] = { ...baseline[0], variants: baseline[0].variants + 1 };
+        return renderP1CJson(baseline);
+      })();
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              baselineText: variantDriftBaseline,
+              provenanceText: provenanceMatching({
+                baseline: variantDriftBaseline,
+              }),
+            }),
+          Error,
+        ).message,
+        'Focused P1C execution evidence has the wrong source identity',
+      );
+      const destinationDriftDisposition = (() => {
+        const disposition = JSON.parse(dispositionText);
+        disposition.destinations[0] = {
+          ...disposition.destinations[0],
+          status: 'blocked:early-errors-and-declaration-instantiation',
+          blocker: 'early-errors-and-declaration-instantiation',
+        };
+        return renderP1CJson(disposition);
+      })();
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              dispositionText: destinationDriftDisposition,
+              provenanceText: provenanceMatching({
+                disposition: destinationDriftDisposition,
+              }),
+            }),
+          Error,
+        ).message,
+        'Focused P1C execution evidence has the wrong source identity',
+      );
+
+      const sourcePath = JSON.parse(dispositionText).destinations[0].path;
+      const mismatched = JSON.parse(taxonomyText);
+      const mismatchedEntry = findClassification(mismatched, sourcePath);
+      mismatchedEntry.status =
+        'blocked:early-errors-and-declaration-instantiation';
+      mismatchedEntry.blocker = 'early-errors-and-declaration-instantiation';
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({
+              ...options,
+              taxonomyText: renderP1CJson(mismatched),
+            }),
+          Error,
+        ).message,
+        `Focused P1C applied taxonomy mismatch: ${sourcePath}`,
+      );
+      const drifted = JSON.parse(taxonomyText);
+      findClassification(drifted, sourcePath).provenance.push(
+        'foreign-p1c-drift',
+      );
+      assertSame(
+        assertThrows(
+          () =>
+            reconstruct({ ...options, taxonomyText: renderP1CJson(drifted) }),
+          Error,
+        ).message,
+        `Focused P1C applied taxonomy drift: ${sourcePath}`,
       );
     },
   },
@@ -1097,6 +1366,15 @@ export default [
         promotionText: renderP1CJson(evidence.promotion),
         featuresText: inputs.featuresText,
       });
+      const projectedTaxonomyText = renderP1CJson({
+        ...JSON.parse(projected.taxonomyText),
+        inputs: {
+          ...JSON.parse(projected.taxonomyText).inputs,
+          subsetSha256: sha256(projected.subsetText),
+          selectedEvidenceSha256: sha256(artifacts.reportText),
+          auditEvidenceSha256: sha256(projected.auditEvidenceText),
+        },
+      });
       const authority = buildP1CPendingAuthority({
         baseTaxonomyText: inputs.taxonomyText,
         evidenceTexts: buildP1CEvidenceTexts(evidence),
@@ -1112,7 +1390,7 @@ export default [
           'docs/test262-report.jsonl': artifacts.reportText,
           'tools/test262/es2015-audit-evidence.json':
             projected.auditEvidenceText,
-          'tools/test262/es2015-taxonomy.json': projected.taxonomyText,
+          'tools/test262/es2015-taxonomy.json': projectedTaxonomyText,
           'tools/test262/upstream-subset.json': projected.subsetText,
         },
       });
@@ -1157,17 +1435,55 @@ export default [
         false,
       );
       assertSame(
-        /^[0-9a-f]{64}$/u.test(canonicalRoadmapAuthoritySha256(authority)),
-        true,
+        sha256(projected.auditEvidenceText),
+        '50f9a54346d0e9e5168a6ac6b0b8de6d709e2c5b808d6c8b036e5113612e638c',
       );
       assertSame(
-        /^[0-9a-f]{64}$/u.test(roadmapAggregateProjectionSha256(authority)),
-        true,
+        sha256(projectedTaxonomyText),
+        'fdf3c8bf229f6c841209e4c4a2196001d45cf0a1c270f334cf06e5f54a00f3c7',
+      );
+      assertSame(
+        sha256(projected.subsetText),
+        '5a5b83b3c28991c5f2ac141ed949a9698966cce85587d671a4417228d5e08b14',
+      );
+      assertSame(
+        sha256(artifacts.reportText),
+        '89002c4b597748a53ccc4ea60df25d981660f4311cee1e933f95fd13b39e69ff',
+      );
+      assertSame(
+        sha256(artifacts.conformanceText),
+        '9cc4250ed8a69e7d62e82ad7452bb2563c319856ed97a53bd00b96d0017c6cfe',
+      );
+      assertSame(
+        canonicalRoadmapAuthoritySha256(authority),
+        '95036226ee50e365b03c823bab751c6e1d646af0d5c6352a199cd442e2aa9278',
+      );
+      assertSame(
+        roadmapAggregateProjectionSha256(authority),
+        '6e92772f4eb42ecaef7f673f243ecdd689b73bc1e9a7a3a545150c2f8630a813',
+      );
+      const appliedAuthority = structuredClone(authority);
+      appliedAuthority.state = 'applied';
+      assertSame(
+        canonicalRoadmapAuthoritySha256(appliedAuthority),
+        P1C_CORRECTED_APPLIED_RECORD_SHA256,
+      );
+      const trackedAuthority = JSON.parse(
+        await readFile(
+          new URL('tools/test262/es2015-provenance.json', REPOSITORY_ROOT),
+          'utf8',
+        ),
+      ).roadmapAuthorities.find(
+        (/** @type {any} */ entry) => entry.code === 'P1C',
+      );
+      assertSame(
+        JSON.stringify(trackedAuthority),
+        JSON.stringify(appliedAuthority),
       );
     },
   },
   {
-    name: 'P1C build-scratch writes the exact authority bundle',
+    name: 'P1C build-scratch does not reuse applied outputs as a new authority base',
     run: async () => {
       const { main } = await loadP1C();
       const inputs = await readP1CProjectionInputs();
@@ -1177,8 +1493,7 @@ export default [
       const executionPath = `${fixturePath}/unit-execution.json`;
       const outputPath = `${fixturePath}/unit-authority`;
       const sourceByPath = syntheticP1CSources(inputs.ledgerText, taxonomy);
-      let collateralRuns = 0;
-      const result = await (async () => {
+      const message = await (async () => {
         await mkdir(fixtureUrl, { recursive: true });
         try {
           await writeFile(
@@ -1186,110 +1501,49 @@ export default [
             renderP1CJson(syntheticP1CExecution(inputs.ledgerText, taxonomy)),
             'utf8',
           );
-          const status = await main(
-            [
-              '--build-scratch',
-              '--ledger=tools/test262/es2015-p1c-paths.txt',
-              `--execution=${executionPath}`,
-              `--output=${outputPath}`,
-            ],
-            {
-              environment: { TZ: 'UTC' },
-              readPin: async () => ({
-                repository: taxonomy.pin.repository,
-                revision: taxonomy.pin.revision,
-                checkoutPath: 'vendor/test262',
-              }),
-              assertPinnedCheckout: async () => {},
-              readRoot: async (sourcePath) => {
-                const source = sourceByPath.get(sourcePath);
-                if (source === undefined) {
-                  throw new Error(`missing synthetic P1C source ${sourcePath}`);
-                }
-                return source;
+          try {
+            await main(
+              [
+                '--build-scratch',
+                '--ledger=tools/test262/es2015-p1c-paths.txt',
+                `--execution=${executionPath}`,
+                `--output=${outputPath}`,
+              ],
+              {
+                environment: { TZ: 'UTC' },
+                readPin: async () => ({
+                  repository: taxonomy.pin.repository,
+                  revision: taxonomy.pin.revision,
+                  checkoutPath: 'vendor/test262',
+                }),
+                assertPinnedCheckout: async () => {},
+                readRoot: async (sourcePath) => {
+                  const source = sourceByPath.get(sourcePath);
+                  if (source === undefined) {
+                    throw new Error(
+                      `missing synthetic P1C source ${sourcePath}`,
+                    );
+                  }
+                  return source;
+                },
+                readIncludeDefinitions: async () =>
+                  syntheticP1CIncludeDefinitions(),
+                runCollateralFocused: async () =>
+                  syntheticP1CCollateralExecution(),
               },
-              readIncludeDefinitions: async () =>
-                syntheticP1CIncludeDefinitions(),
-              runCollateralFocused: async () => {
-                collateralRuns += 1;
-                return syntheticP1CCollateralExecution();
-              },
-            },
-          );
-          const collateralText = await readFile(
-            new URL('unit-authority/collateral-execution.json', fixtureUrl),
-            'utf8',
-          );
-          const authorityText = await readFile(
-            new URL('unit-authority/authority-record.json', fixtureUrl),
-            'utf8',
-          );
-          const summary = JSON.parse(
-            await readFile(
-              new URL('unit-authority/summary.json', fixtureUrl),
-              'utf8',
-            ),
-          );
-          return { status, collateralText, authorityText, summary };
+            );
+          } catch (error) {
+            return error instanceof Error ? error.message : String(error);
+          }
+          return '';
         } finally {
           await rm(fixtureUrl, { recursive: true, force: true });
         }
       })();
 
-      assertSame(result.status, 0);
-      assertSame(collateralRuns, 1);
       assertSame(
-        result.collateralText,
-        renderP1CJson(syntheticP1CCollateralExecution()),
-      );
-      assertSame(result.summary.collateral.roots, P1C_COLLATERAL_PATHS.length);
-      assertSame(result.summary.collateral.variants, 8);
-      assertSame(result.summary.collateral.failed, 8);
-      assertSame(
-        result.summary.collateral.sha256,
-        sha256(result.collateralText),
-      );
-      assertSame(
-        sha256(result.authorityText),
-        '62e26cc29ffeab0e67899c968f3ccb974dd663ee8b2beadd5c2a31ddbce2373f',
-      );
-      assertSame(
-        canonicalRoadmapAuthoritySha256(JSON.parse(result.authorityText)),
-        '95036226ee50e365b03c823bab751c6e1d646af0d5c6352a199cd442e2aa9278',
-      );
-      assertSame(
-        result.summary.authoritySha256,
-        '95036226ee50e365b03c823bab751c6e1d646af0d5c6352a199cd442e2aa9278',
-      );
-      assertSame(
-        result.summary.protectedProjectionSha256,
-        '6e92772f4eb42ecaef7f673f243ecdd689b73bc1e9a7a3a545150c2f8630a813',
-      );
-      assertSame(
-        result.summary.fileSha256[
-          'projected/tools/test262/es2015-audit-evidence.json'
-        ],
-        '50f9a54346d0e9e5168a6ac6b0b8de6d709e2c5b808d6c8b036e5113612e638c',
-      );
-      assertSame(
-        result.summary.fileSha256[
-          'projected/tools/test262/es2015-taxonomy.json'
-        ],
-        'fdf3c8bf229f6c841209e4c4a2196001d45cf0a1c270f334cf06e5f54a00f3c7',
-      );
-      assertSame(
-        result.summary.fileSha256[
-          'projected/tools/test262/upstream-subset.json'
-        ],
-        '5a5b83b3c28991c5f2ac141ed949a9698966cce85587d671a4417228d5e08b14',
-      );
-      assertSame(
-        result.summary.fileSha256['projected/docs/test262-report.jsonl'],
-        '89002c4b597748a53ccc4ea60df25d981660f4311cee1e933f95fd13b39e69ff',
-      );
-      assertSame(
-        result.summary.fileSha256['projected/docs/conformance.md'],
-        '9cc4250ed8a69e7d62e82ad7452bb2563c319856ed97a53bd00b96d0017c6cfe',
+        message,
+        'P1C BASE classification mismatch: test/language/statements/try/dstr/ary-init-iter-close.js',
       );
     },
   },
@@ -1299,26 +1553,33 @@ async function loadP1C() {
   return import('../../tools/test262/es2015-p1c.js');
 }
 
+/** @param {string} path */
+function readP1CConsumerBaseText(path) {
+  return execFileSync(
+    'git',
+    ['-c', 'core.pager=cat', 'show', `${P1C_CONSUMER_BASE}:${path}`],
+    /** @type {any} */ ({
+      cwd: REPOSITORY_ROOT_PATH,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+    }),
+  );
+}
+
 async function readP1CInputs() {
-  const [ledgerText, taxonomyText, selectionText, subsetText] =
-    await Promise.all([
-      readFile(
-        new URL('tools/test262/es2015-p1c-paths.txt', REPOSITORY_ROOT),
-        'utf8',
-      ),
-      readFile(
-        new URL('tools/test262/es2015-taxonomy.json', REPOSITORY_ROOT),
-        'utf8',
-      ),
-      readFile(
-        new URL('tools/test262/es5-selection.json', REPOSITORY_ROOT),
-        'utf8',
-      ),
-      readFile(
-        new URL('tools/test262/upstream-subset.json', REPOSITORY_ROOT),
-        'utf8',
-      ),
-    ]);
+  const ledgerText = await readFile(
+    new URL('tools/test262/es2015-p1c-paths.txt', REPOSITORY_ROOT),
+    'utf8',
+  );
+  const taxonomyText = readP1CConsumerBaseText(
+    'tools/test262/es2015-taxonomy.json',
+  );
+  const selectionText = readP1CConsumerBaseText(
+    'tools/test262/es5-selection.json',
+  );
+  const subsetText = readP1CConsumerBaseText(
+    'tools/test262/upstream-subset.json',
+  );
   return {
     ledgerText,
     taxonomy: JSON.parse(taxonomyText),
@@ -1328,25 +1589,22 @@ async function readP1CInputs() {
 }
 
 async function readP1CProjectionInputs() {
-  const [
-    ledgerText,
-    taxonomyText,
-    auditEvidenceText,
-    subsetText,
-    reportText,
-    conformanceText,
-    featuresText,
-  ] = await Promise.all(
-    [
-      'tools/test262/es2015-p1c-paths.txt',
-      'tools/test262/es2015-taxonomy.json',
-      'tools/test262/es2015-audit-evidence.json',
-      'tools/test262/upstream-subset.json',
-      'docs/test262-report.jsonl',
-      'docs/conformance.md',
-      'tools/test262/features.json',
-    ].map((file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8')),
+  const [ledgerText, featuresText] = await Promise.all(
+    ['tools/test262/es2015-p1c-paths.txt', 'tools/test262/features.json'].map(
+      (file) => readFile(new URL(file, REPOSITORY_ROOT), 'utf8'),
+    ),
   );
+  const taxonomyText = readP1CConsumerBaseText(
+    'tools/test262/es2015-taxonomy.json',
+  );
+  const auditEvidenceText = readP1CConsumerBaseText(
+    'tools/test262/es2015-audit-evidence.json',
+  );
+  const subsetText = readP1CConsumerBaseText(
+    'tools/test262/upstream-subset.json',
+  );
+  const reportText = readP1CConsumerBaseText('docs/test262-report.jsonl');
+  const conformanceText = readP1CConsumerBaseText('docs/conformance.md');
   return {
     ledgerText,
     ledgerSha256: sha256(ledgerText),

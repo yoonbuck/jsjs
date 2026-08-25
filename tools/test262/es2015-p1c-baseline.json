@@ -1,0 +1,1494 @@
+[
+  {
+    "path": "test/language/statements/try/dstr/ary-init-iter-close.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "Symbol.iterator",
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:Symbol.iterator",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-init-iter-get-err-array-prototype.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "Symbol.iterator",
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:Symbol.iterator",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-init-iter-get-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "Symbol.iterator",
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:Symbol.iterator",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-init-iter-no-close.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "Symbol.iterator",
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:Symbol.iterator",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-name-iter-val.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-ary-elem-init.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-ary-elem-iter.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-ary-elision-init.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding",
+      "generators"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding",
+      "feature:generators"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-ary-elision-iter.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding",
+      "generators"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding",
+      "feature:generators"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-ary-empty-init.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding",
+      "generators"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding",
+      "feature:generators"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-ary-empty-iter.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-ary-rest-init.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-ary-rest-iter.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-ary-val-null.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-exhausted.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-arrow.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-class.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-cover.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-fn.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-fn-name-gen.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding",
+      "generators"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding",
+      "feature:generators"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-hole.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-skipped.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-throws.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-undef.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-init-unresolvable.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-complete.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-done.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-step-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "Symbol.iterator",
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:Symbol.iterator",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-val-array-prototype.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "Symbol.iterator",
+      "destructuring-binding",
+      "generators"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:Symbol.iterator",
+      "feature:destructuring-binding",
+      "feature:generators"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-val-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "Symbol.iterator",
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:Symbol.iterator",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-id-iter-val.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-obj-id-init.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-obj-id.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-obj-prop-id-init.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-obj-prop-id.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-obj-val-null.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elem-obj-val-undef.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elision-exhausted.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding",
+      "generators"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding",
+      "feature:generators"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elision-step-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding",
+      "generators"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding",
+      "feature:generators"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-elision.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding",
+      "generators"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding",
+      "feature:generators"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-empty.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding",
+      "generators"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding",
+      "feature:generators"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-rest-id-direct.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [
+      "compareArray.js"
+    ],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-rest-id-elision-next-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding",
+      "generators"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding",
+      "feature:generators"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-rest-id-elision.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-rest-id-exhausted.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "Symbol.iterator",
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:Symbol.iterator",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-rest-id-iter-step-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding",
+      "generators"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding",
+      "feature:generators"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-rest-id-iter-val-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "Symbol.iterator",
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:Symbol.iterator",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/ary-ptrn-rest-id.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-init-null.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-init-undefined.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-empty.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-id-get-value-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-arrow.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-class.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-cover.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-fn.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-id-init-fn-name-gen.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding",
+      "generators"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding",
+      "feature:generators"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-id-init-skipped.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-id-init-throws.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-id-init-unresolvable.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-id-trailing-comma.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-list-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-ary-init.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-ary-trailing-comma.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-ary-value-null.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-ary.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-eval-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-id-get-value-err.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-id-init-skipped.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-id-init-throws.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-id-init-unresolvable.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-id-init.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-id-trailing-comma.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-id.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-obj-init.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-obj-value-null.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-obj-value-undef.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/dstr/obj-ptrn-prop-obj.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "destructuring-binding"
+    ],
+    "flags": [
+      "generated"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:destructuring-binding"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/scope-catch-block-lex-open.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [
+      "let"
+    ],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation",
+      "feature:let"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/scope-catch-param-lex-open.js",
+    "variants": 2,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [],
+    "flags": [],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation"
+    ]
+  },
+  {
+    "path": "test/language/statements/try/scope-catch-param-var-none.js",
+    "variants": 1,
+    "partition": "core",
+    "status": "blocked:early-errors-and-declaration-instantiation",
+    "blocker": "early-errors-and-declaration-instantiation",
+    "features": [],
+    "flags": [
+      "noStrict"
+    ],
+    "includes": [],
+    "provenance": [
+      "anchor:sec-runtime-semantics-catchclauseevaluation"
+    ]
+  }
+]

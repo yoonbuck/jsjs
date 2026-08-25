@@ -27,6 +27,7 @@ const REPOSITORY_ROOT = new URL('../../', import.meta.url);
 const REPOSITORY_ROOT_PATH = fileURLToPath(REPOSITORY_ROOT);
 const { structuredClone } = globalThis;
 const M1_REPAIRED_BASE = '44c2a747ee544fb85403380f86dc6a0e126faceb';
+const P1C_CONSUMER_BASE = '968c0124cc5c3d63a19c3f926ed7857dfb3333ce';
 const M1_CONSTRUCTOR_INCLUDE_PATHS = Object.freeze([
   'test/built-ins/Reflect/apply/not-a-constructor.js',
   'test/built-ins/Reflect/construct/not-a-constructor.js',
@@ -65,6 +66,19 @@ function readM1BaseText(path) {
   });
   if (result.status !== 0) {
     throw new Error(`M1 repaired BASE file is unavailable: ${path}`);
+  }
+  return result.stdout;
+}
+
+/** @param {string} path */
+function readP1CConsumerBaseText(path) {
+  const result = spawnSync('git', ['show', `${P1C_CONSUMER_BASE}:${path}`], {
+    cwd: REPOSITORY_ROOT_PATH,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    throw new Error(`P1C consumer BASE file is unavailable: ${path}`);
   }
   return result.stdout;
 }
@@ -1241,12 +1255,85 @@ export default [
         throw new Error('M1 selection projection is unavailable');
       }
       const selection = projectM1Selection(sourceSelectionText);
-      assertSame(projected.taxonomyText, taxonomyText);
-      assertSame(projected.auditEvidenceText, auditEvidenceText);
-      assertSame(projected.subsetText, subsetText);
-      assertSame(projected.reportText, reportText);
-      assertSame(projected.conformanceText, conformanceText);
+      assertSame(
+        projected.taxonomyText,
+        readP1CConsumerBaseText('tools/test262/es2015-taxonomy.json'),
+      );
+      assertSame(
+        projected.auditEvidenceText,
+        readP1CConsumerBaseText('tools/test262/es2015-audit-evidence.json'),
+      );
+      assertSame(
+        projected.subsetText,
+        readP1CConsumerBaseText('tools/test262/upstream-subset.json'),
+      );
+      assertSame(
+        projected.reportText,
+        readP1CConsumerBaseText('docs/test262-report.jsonl'),
+      );
+      assertSame(
+        projected.conformanceText,
+        readP1CConsumerBaseText('docs/conformance.md'),
+      );
       assertSame(selection.headText, selectionText);
+      const subset = JSON.parse(subsetText);
+      assertSame(subset.groups.length, 62);
+      assertSame(
+        new Set(
+          subset.groups.flatMap((/** @type {any} */ group) => group.paths),
+        ).size,
+        20672,
+      );
+      const currentTaxonomy = JSON.parse(taxonomyText);
+      const projectedTaxonomy = JSON.parse(projected.taxonomyText);
+      const currentByPath = new Map(
+        currentTaxonomy.classifications.map((/** @type {any} */ entry) => [
+          entry.path,
+          entry,
+        ]),
+      );
+      const projectedByPath = new Map(
+        projectedTaxonomy.classifications.map((/** @type {any} */ entry) => [
+          entry.path,
+          entry,
+        ]),
+      );
+      for (const path of sourcePaths) {
+        assertSame(
+          JSON.stringify(currentByPath.get(path)),
+          JSON.stringify(projectedByPath.get(path)),
+          path,
+        );
+      }
+      const currentReport = reportText
+        .trimEnd()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+        .filter(
+          (/** @type {any} */ record) =>
+            record.type === 'test' && sourcePaths.has(record.file),
+        );
+      const projectedReport = projected.reportText
+        .trimEnd()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+        .filter(
+          (/** @type {any} */ record) =>
+            record.type === 'test' && sourcePaths.has(record.file),
+        );
+      assertSame(
+        JSON.stringify(currentReport),
+        JSON.stringify(projectedReport),
+      );
+      const stripCoverage = (/** @type {string} */ text) =>
+        text.replace(
+          /<!-- test262-coverage:begin -->[\s\S]*?<!-- test262-coverage:end -->/u,
+          '<!-- test262-coverage:begin --><!-- test262-coverage:end -->',
+        );
+      assertSame(
+        stripCoverage(conformanceText),
+        stripCoverage(projected.conformanceText),
+      );
 
       const pendingAuthority = buildM1PendingAuthority({
         baseTaxonomyText: sourceTaxonomyText,
@@ -1297,7 +1384,7 @@ export default [
         '31f807a05d56d35762cd5457f779624df04f11ef482b3d1bcb60be3a06883c69',
       );
       assertSame(
-        sha256(taxonomyText),
+        sha256(projected.taxonomyText),
         'fba700539b05edd67b6cf67e4c0a1361398a2d0f04212bc7080a83f44abf577a',
       );
       assertSame(

@@ -9,7 +9,6 @@ import {
   ES5_SELECTION_VERSION,
   matchExclusion,
   parseEs5Selection,
-  serializeUpstreamSubset,
 } from '../../tools/test262/es5-selection.js';
 import {
   ES2015_H0_PROMOTION_GROUP,
@@ -101,7 +100,7 @@ const DURABLE_LEDGER_SHA256 =
 const PRE_PROMOTION_TAXONOMY_SHA256 =
   'ce05cbdf15ee3262651520f81ca7e904e021cd4dfcbb29d787b69b4f8f897e31';
 const PRE_PROMOTION_GROUPS_SHA256 =
-  '064be556b3e98debaca2287097c2ab431283906df57a82dd5c6aba01227440f8';
+  '6d8aa96442ef3219ab6d39df4ce452a973f43f4b03644d0258f67c9127d873a4';
 const P1C_PROMOTION_GROUP = 'es2015/p1c-catch-binding';
 const M1_TRACKED_SOURCE_FEATURE_ORDER = Object.freeze({
   'test/built-ins/Reflect/Symbol.toStringTag.js': Object.freeze([
@@ -176,6 +175,7 @@ const M1_REPORT_TRACKED_EVIDENCE_PATHS = Object.freeze([
   'tools/test262/es2015-audit-evidence.json',
   'tools/test262/es2015-h0-promotion.json',
   'tools/test262/es2015-m1-promotion.json',
+  'tools/test262/es2015-p1c-promotion.json',
   'tools/test262/es2015-promotion.json',
 ]);
 const H0_PIN = Object.freeze({
@@ -1412,7 +1412,7 @@ export default [
     },
   },
   {
-    name: 'roadmap promotions preserve current selection bytes when optional P1C is absent and add one unique exact group when present',
+    name: 'roadmap promotions preserve prior groups and add one unique optional P1C group',
     run: async () => {
       assertSame(
         ES2015_P1C_PROMOTION_FILE,
@@ -1462,7 +1462,8 @@ export default [
             (group) =>
               group.name !== ES2015_PROMOTION_GROUP &&
               group.name !== ES2015_H0_PROMOTION_GROUP &&
-              group.name !== 'es2015/m1-reflect',
+              group.name !== 'es2015/m1-reflect' &&
+              group.name !== P1C_PROMOTION_GROUP,
           ),
         }),
       );
@@ -1474,8 +1475,8 @@ export default [
         P1C_PROMOTION,
       ]);
 
-      assertSame(serializeUpstreamSubset(withoutP1C), subsetText);
-      assertSame(withP1C.groups.length, subset.groups.length + 1);
+      assertSame(withoutP1C.groups.length, subset.groups.length - 1);
+      assertSame(withP1C.groups.length, withoutP1C.groups.length + 1);
       assertSame(
         JSON.stringify(
           withP1C.groups
@@ -1488,7 +1489,7 @@ export default [
         JSON.stringify(
           withP1C.groups.filter((group) => group.name !== P1C_PROMOTION_GROUP),
         ),
-        JSON.stringify(subset.groups),
+        JSON.stringify(withoutP1C.groups),
       );
     },
   },
@@ -1527,7 +1528,8 @@ export default [
             (group) =>
               group.name !== ES2015_PROMOTION_GROUP &&
               group.name !== ES2015_H0_PROMOTION_GROUP &&
-              group.name !== 'es2015/m1-reflect',
+              group.name !== 'es2015/m1-reflect' &&
+              group.name !== P1C_PROMOTION_GROUP,
           ),
         }),
       );
@@ -1843,28 +1845,38 @@ export default [
   {
     name: 'checked-in ES2015 promotions exactly match their durable ledgers and generated subset groups',
     run: async () => {
-      const [promotionText, h0PromotionText, m1PromotionText, subsetText] =
-        await Promise.all([
-          readFile(
-            new URL('tools/test262/es2015-promotion.json', REPOSITORY_ROOT),
-            'utf8',
-          ),
-          readFile(
-            new URL('tools/test262/es2015-h0-promotion.json', REPOSITORY_ROOT),
-            'utf8',
-          ),
-          readFile(
-            new URL('tools/test262/es2015-m1-promotion.json', REPOSITORY_ROOT),
-            'utf8',
-          ),
-          readFile(
-            new URL('tools/test262/upstream-subset.json', REPOSITORY_ROOT),
-            'utf8',
-          ),
-        ]);
+      const [
+        promotionText,
+        h0PromotionText,
+        m1PromotionText,
+        p1cPromotionText,
+        subsetText,
+      ] = await Promise.all([
+        readFile(
+          new URL('tools/test262/es2015-promotion.json', REPOSITORY_ROOT),
+          'utf8',
+        ),
+        readFile(
+          new URL('tools/test262/es2015-h0-promotion.json', REPOSITORY_ROOT),
+          'utf8',
+        ),
+        readFile(
+          new URL('tools/test262/es2015-m1-promotion.json', REPOSITORY_ROOT),
+          'utf8',
+        ),
+        readFile(
+          new URL('tools/test262/es2015-p1c-promotion.json', REPOSITORY_ROOT),
+          'utf8',
+        ),
+        readFile(
+          new URL('tools/test262/upstream-subset.json', REPOSITORY_ROOT),
+          'utf8',
+        ),
+      ]);
       const manifest = parseEs2015Promotion(promotionText);
       const h0Manifest = parseEs2015Promotion(h0PromotionText);
       const m1Manifest = parseEs2015Promotion(m1PromotionText);
+      const p1cManifest = parseEs2015Promotion(p1cPromotionText);
       const subset = parseUpstreamSubset(subsetText);
       const promotion = subset.groups.filter(
         (group) => group.name === 'es2015/audit-passing-promotion',
@@ -1875,15 +1887,20 @@ export default [
       const m1Promotion = subset.groups.filter(
         (group) => group.name === 'es2015/m1-reflect',
       );
+      const p1cPromotion = subset.groups.filter(
+        (group) => group.name === P1C_PROMOTION_GROUP,
+      );
       const preExistingGroups = subset.groups.filter(
         (group) =>
           group.name !== 'es2015/audit-passing-promotion' &&
           group.name !== ES2015_H0_PROMOTION_GROUP &&
-          group.name !== 'es2015/m1-reflect',
+          group.name !== 'es2015/m1-reflect' &&
+          group.name !== P1C_PROMOTION_GROUP,
       );
       const paths = promotionPaths(manifest);
       const h0Paths = promotionPaths(h0Manifest);
       const m1Paths = promotionPaths(m1Manifest);
+      const p1cPaths = promotionPaths(p1cManifest);
 
       assertSame(manifest.rootCount, 6323);
       assertSame(manifest.variantCount, 11955);
@@ -1901,6 +1918,13 @@ export default [
       assertSame(
         JSON.stringify(m1Promotion[0]?.paths),
         JSON.stringify(m1Paths),
+      );
+      assertSame(p1cManifest.rootCount, 81);
+      assertSame(p1cManifest.variantCount, 161);
+      assertSame(p1cPromotion.length, 1);
+      assertSame(
+        JSON.stringify(p1cPromotion[0]?.paths),
+        JSON.stringify(p1cPaths),
       );
       assertSame(
         JSON.stringify(
@@ -1926,28 +1950,37 @@ export default [
         promotionText,
         h0PromotionText,
         m1PromotionText,
+        p1cPromotionText,
         auditEvidenceText,
       ] = await Promise.all([
         readM1ReportEvidence('tools/test262/es2015-promotion.json'),
         readM1ReportEvidence('tools/test262/es2015-h0-promotion.json'),
         readM1ReportEvidence('tools/test262/es2015-m1-promotion.json'),
+        readM1ReportEvidence('tools/test262/es2015-p1c-promotion.json'),
         readM1ReportEvidence('tools/test262/es2015-audit-evidence.json'),
       ]);
       const promotion = parseEs2015Promotion(promotionText);
       const h0Promotion = parseEs2015Promotion(h0PromotionText);
       const m1Promotion = parseEs2015Promotion(m1PromotionText);
+      const p1cPromotion = parseEs2015Promotion(p1cPromotionText);
       const auditEvidence = JSON.parse(auditEvidenceText);
       const reportFeaturesForPath = createReportFeatures([
         m1Promotion,
-        P1C_PROMOTION,
+        p1cPromotion,
       ]);
       const m1Paths = new Set(m1Promotion.entries.map((entry) => entry.path));
       const m1AuditRecords = auditEvidence.auditRecords.filter(
         (/** @type {any} */ record) => m1Paths.has(record.file),
       );
+      const p1cPaths = new Set(p1cPromotion.entries.map((entry) => entry.path));
+      const p1cAuditRecords = auditEvidence.auditRecords.filter(
+        (/** @type {any} */ record) => p1cPaths.has(record.file),
+      );
 
       assertSame(m1Promotion.entries.length, 103);
       assertSame(m1AuditRecords.length, 206);
+      assertSame(p1cPromotion.entries.length, 81);
+      assertSame(p1cAuditRecords.length, 161);
       for (const entry of m1Promotion.entries) {
         assertSame(
           JSON.stringify(reportFeaturesForPath(entry.path)),
@@ -1971,11 +2004,18 @@ export default [
           `tracked M1 audit evidence drifted for ${entry.path}`,
         );
       }
-      for (const entry of P1C_PROMOTION.entries) {
+      for (const entry of p1cPromotion.entries) {
         assertSame(
           JSON.stringify(reportFeaturesForPath(entry.path)),
           JSON.stringify(entry.features),
           entry.path,
+        );
+        assertSame(
+          p1cAuditRecords
+            .filter((/** @type {any} */ record) => record.file === entry.path)
+            .every((/** @type {any} */ record) => record.status === 'passed'),
+          true,
+          `tracked P1C audit evidence drifted for ${entry.path}`,
         );
       }
 
@@ -1998,7 +2038,7 @@ export default [
         JSON.stringify(M1_REPORT_ORDER_DIVERGENT_PATHS),
       );
       const p1cDivergent = [];
-      for (const entry of P1C_PROMOTION.entries) {
+      for (const entry of p1cPromotion.entries) {
         if (
           JSON.stringify(reportFeaturesForPath(entry.path)) !==
           JSON.stringify(entry.features)

@@ -11538,11 +11538,24 @@ export default [
       const headP1C = headManifest.roadmapAuthorities.find(
         (/** @type {{ code: string }} */ authority) => authority.code === 'P1C',
       );
+      const trackedManifestText = readFileSyncText(
+        new URL(`../../${ES2015_PROVENANCE_FILE}`, import.meta.url),
+        'utf8',
+      );
+      const trackedManifest = globalThis.structuredClone(
+        parseEs2015ProvenanceManifest(trackedManifestText),
+      );
+      const trackedP1C = trackedManifest.roadmapAuthorities.find(
+        (/** @type {{ code: string }} */ authority) => authority.code === 'P1C',
+      );
+      assertSame(trackedP1C.state, 'applied');
       assertSame(
-        readFileSyncText(
-          new URL(`../../${ES2015_PROVENANCE_FILE}`, import.meta.url),
-          'utf8',
-        ),
+        canonicalRoadmapAuthoritySha256(trackedP1C),
+        '64db02e17f5d7e7f26805eee912d625b53a989e4c4ae17b15165bea3118bfefa',
+      );
+      trackedP1C.state = 'pending';
+      assertSame(
+        renderEs2015ProvenanceManifest(trackedManifest),
         headManifestText,
       );
       assertSame(
@@ -12747,6 +12760,36 @@ export default [
       );
       assertSame(
         aggregateError.message,
+        'roadmap-reclassification:P1C marker protected-projection-sha256 does not match P1C roadmap authority',
+      );
+
+      const staleAggregateError = await rejected(() =>
+        validateRoadmapAuthorityConsumption(
+          pendingManifest,
+          appliedManifest,
+          parseRoadmapAuthorityMarker(
+            roadmapConsumptionMarker({
+              code: 'P1C',
+              issue: 116,
+              profile: 'roadmap-reclassification:P1C',
+              base: P1C_AUTHORITY_REPAIR_BASE,
+              sourcePathSha256:
+                'e40f2a9c1dcd2aeb2cb56c4e3147a49d8d15275724abe002589dbbac05cb65d5',
+              sourceEntrySha256: null,
+              protectedProjectionSha256:
+                '30354b59b9dea45a94b47ca5c1edf270c161e3230f04661e4ce6cfe8f9089b0b',
+            }),
+          ),
+          {
+            deps,
+            base: P1C_AUTHORITY_REPAIR_BASE,
+            head: RANGE_HEAD_SHA,
+            changes,
+          },
+        ),
+      );
+      assertSame(
+        staleAggregateError.message,
         'roadmap-reclassification:P1C marker protected-projection-sha256 does not match P1C roadmap authority',
       );
     },

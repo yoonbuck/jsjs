@@ -806,6 +806,81 @@ Test262, `npm run test262:upstream`, `npm run test262:upstream:check`,
 `npm run test262:es2015-release`, `npm run ci:contract`, or full
 Node/browser/JSC suites. Exact-head CI owns configured broad execution.
 
+### Exact P1C catch-binding evidence (#116)
+
+The immutable P1C ledger is
+[`tools/test262/es2015-p1c-paths.txt`](../tools/test262/es2015-p1c-paths.txt):
+81 code-unit-sorted, newline-terminated catch-binding roots, 161 executable
+variants, and SHA-256
+`e40f2a9c1dcd2aeb2cb56c4e3147a49d8d15275724abe002589dbbac05cb65d5`.
+The pinned inventory has one explicit `compareArray.js` include, a complete
+transitive include-feature closure with zero added features for every root, and
+zero intersections with the ES5 exclusion policy.
+
+Run only the bounded UTC entry point with that exact ledger:
+
+```sh
+TZ=UTC npm run test262:es2015:p1c -- \
+  --ledger=tools/test262/es2015-p1c-paths.txt \
+  --output=.superpowers/issue-116/p1c/execution.json
+```
+
+The reviewed result is 81 complete-pass roots / 161 variants with zero failed,
+skipped, or residual variants. The six canonical evidence files — paths,
+baseline, disposition, owner-delta, owner-map, and promotion — are prepared once
+at the corrected authority base and reviewed as ignored `.superpowers/` scratch
+input; they must not overwrite tracked authority-owned files. The owner files
+are empty arrays, and the named schema-v2 `es2015/p1c-catch-binding` promotion
+contains all 81 roots and 161 variants.
+
+The consumer adds those six evidence files exactly, replaces the audit evidence,
+taxonomy, and upstream subset with their exact corrected bytes, and projects the
+selected report and generated conformance block, validating each projection.
+`tools/test262/es5-selection.json` and its exclusions remain byte-identical to
+the applied authority base. The P1C authority changes only from `pending` to
+`applied`. After that transition, the focused runner validates the tracked
+baseline and disposition hashes against the applied authority and reconstructs
+the pre-promotion source classifications before re-executing the ledger;
+`--build-scratch` no longer accepts the applied taxonomy as a fresh authority
+base.
+
+At the reviewed live base
+`968c0124cc5c3d63a19c3f926ed7857dfb3333ce`, the applied selection is
+62 groups / 20,672 selected roots / 39,292 selected variants, with 14,349
+generated non-T0 roots. The corrected P1C parser correctly rejects 4 exact
+ES2016 nested binding-rest collateral roots / 8 failed variants that the
+defective authority base still selected, so those collateral roots stay outside
+the applied ES2015 corpus. These are derived deltas of exactly +1 group,
++77 roots, and +153 variants relative to the base's 61 groups / 20,595 paths /
+39,139 variants; a different authority base requires rebuilding the execution,
+scratch evidence, pending authority, projection hashes, and integration literals
+rather than forcing these example totals. The aggregate protected projection is
+`6e92772f4eb42ecaef7f673f243ecdd689b73bc1e9a7a3a545150c2f8630a813`.
+
+Consumption changes only P1C from `pending` to `applied` and uses this normal
+LF-only marker; it never reuses the historical repair exception:
+
+```text
+<!-- es2015-roadmap-authority-consume
+parent:70
+code:P1C
+issue:116
+profile:roadmap-reclassification:P1C
+base:968c0124cc5c3d63a19c3f926ed7857dfb3333ce
+source-path-sha256:e40f2a9c1dcd2aeb2cb56c4e3147a49d8d15275724abe002589dbbac05cb65d5
+source-entry-sha256:null
+protected-projection-sha256:6e92772f4eb42ecaef7f673f243ecdd689b73bc1e9a7a3a545150c2f8630a813
+-->
+```
+
+Local P1C validation is limited to the named parser, catch-binding, try,
+destructuring, eval, generator-control-flow, P1C, selection, taxonomy, M1,
+provenance, repository-invariant, focused syntax, and browser suites listed by
+the delivery plan, plus the exact P1C runner, typecheck, `ci:check`, and
+`git diff --check`. Do not run `npm test`, broad/full Test262, broad selection
+or exclusion execution, `test262:es2015-release`, `ci:contract`, or full
+Node/browser/JSC registries locally; exact-head CI owns those gates.
+
 ### Focused ES2015 syntax suite
 
 During syntax work, run the small pinned suite instead of the complete generated

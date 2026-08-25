@@ -605,8 +605,8 @@ remaining unsupported class-field and Unicode/legacy-escape forms.
 
 | Denominator     | Whole suite | Selected | Attempted | Passed | Passing |
 | --------------- | ----------- | -------- | --------- | ------ | ------- |
-| Files           | 53,575      | 20,595   | 20,595    | 20,595 | 38.441% |
-| (file, variant) | 102,912     | 39,139   | 39,139    | 39,139 | 38.032% |
+| Files           | 53,575      | 20,672   | 20,672    | 20,672 | 38.585% |
+| (file, variant) | 102,912     | 39,292   | 39,292    | 39,292 | 38.18%  |
 
 0 of the 53,575 files carry frontmatter this tooling cannot parse; they count as files and expand into no (file, variant) records.
 Full per-test records: [docs/test262-report.jsonl](test262-report.jsonl).
