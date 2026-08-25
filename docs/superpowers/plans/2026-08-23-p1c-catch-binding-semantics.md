@@ -337,8 +337,8 @@ tools/test262/es2015-p1c-owner-deltas.json              add-exact
 tools/test262/es2015-p1c-owner-map.json                 add-exact
 tools/test262/es2015-p1c-paths.json                     add-exact
 tools/test262/es2015-p1c-promotion.json                 add-exact
-tools/test262/es2015-taxonomy.json                      project
-tools/test262/upstream-subset.json                      project
+tools/test262/es2015-taxonomy.json                      replace-exact
+tools/test262/upstream-subset.json                      replace-exact
 ```
 
 `tools/test262/es5-selection.json` remains byte-identical and is absent from
