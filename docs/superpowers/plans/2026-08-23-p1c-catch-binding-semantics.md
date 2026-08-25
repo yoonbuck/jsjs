@@ -51,6 +51,90 @@
 
 ---
 
+## 2026-08-24 authority-repair recovery amendment
+
+This amendment supersedes the stale consumer assumptions in this plan while
+preserving the reviewed P1C source implementation and its exact 81-root /
+161-variant evidence. The repaired pending authority on main has canonical
+record SHA-256
+`95036226ee50e365b03c823bab751c6e1d646af0d5c6352a199cd442e2aa9278`.
+P1C remains `pending` during the semantic rebuild; no evidence or protected
+output is tracked until the later normal consumer.
+
+The corrected parser exposes four generated ES2016
+`BindingRestElement : ... BindingPattern` roots that BASE selected and passed
+but P1C HEAD rejects with
+`SyntaxError: rest elements are not supported in this context`:
+
+```text
+test/language/expressions/arrow-function/dstr/dflt-ary-ptrn-rest-ary-elem.js
+test/language/expressions/arrow-function/dstr/dflt-ary-ptrn-rest-ary-rest.js
+test/language/expressions/arrow-function/dstr/dflt-ary-ptrn-rest-obj-id.js
+test/language/expressions/arrow-function/dstr/dflt-ary-ptrn-rest-obj-prop-id.js
+```
+
+The rebuilt projection therefore has exact net movement:
+
+```text
+P1C source promotion:          +81 roots / +161 variants
+selected collateral removal:   -4 roots /   -8 variants
+net selected movement:         +77 roots / +153 variants
+selected output:                62 groups / 20,672 roots / 39,292 variants
+generated non-T0 selection:     14,349 roots
+remaining post-P1C selector:    406 roots / 798 variants
+```
+
+The corrected five protected outputs are:
+
+```text
+tools/test262/es2015-audit-evidence.json
+50f9a54346d0e9e5168a6ac6b0b8de6d709e2c5b808d6c8b036e5113612e638c
+
+tools/test262/es2015-taxonomy.json
+fdf3c8bf229f6c841209e4c4a2196001d45cf0a1c270f334cf06e5f54a00f3c7
+
+tools/test262/upstream-subset.json
+5a5b83b3c28991c5f2ac141ed949a9698966cce85587d671a4417228d5e08b14
+
+docs/test262-report.jsonl
+89002c4b597748a53ccc4ea60df25d981660f4311cee1e933f95fd13b39e69ff
+
+docs/conformance.md
+9cc4250ed8a69e7d62e82ad7452bb2563c319856ed97a53bd00b96d0017c6cfe
+```
+
+Report and conformance remain `project`; audit, taxonomy, and subset are
+`replace-exact`; the six unchanged evidence files remain `add-exact`. The
+corrected protected aggregate is
+`6e92772f4eb42ecaef7f673f243ecdd689b73bc1e9a7a3a545150c2f8630a813`.
+The corrected applied authority record is
+`64db02e17f5d7e7f26805eee912d625b53a989e4c4ae17b15165bea3118bfefa`.
+
+Historical H0 audit reconstruction must first reverse the ordinary 81-root P1C
+baseline/disposition and then reverse only these exact four blocked
+classifications. That second reversal activates only for the exact corrected
+applied authority, rejects every path/metadata/order/status drift, and does
+not broaden P1C source ownership.
+
+Durable live decomposition accounting is:
+
+```text
+P1R: 254 roots / 494 variants
+3a2356b36431b3553a65289afd03eb0aa1e88a36e78b3684cfb460eaf426c4d6
+
+P1 live decomposition: 487 roots / 959 variants
+94467957a7d427219cfcbe301adef006052437c30a56533ef510e3dacbfbaf88
+
+remaining post-P1C: 406 roots / 798 variants
+182c54ed6fbd4b290b11172809ddd5289bb45b16a07a2c1e4402b94fec2feba7
+```
+
+All earlier `+81/+161`, 20,676/39,300, and 14,353 consumer literals in this
+document are retained as historical reviewed assumptions only and must not be
+used by the corrected consumer.
+
+---
+
 ## Stable Interfaces and File Map
 
 ### Production interface

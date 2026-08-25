@@ -28,6 +28,44 @@ Only this durable design is tracked. Each future child must regenerate and
 track its own authority/evidence inputs against its exact implementation base;
 the ignored analysis outputs are not stable production inputs.
 
+## 2026-08-24 live-ledger correction
+
+Comment `5347038305`, its 482 roots / 949 variants, and SHA-256
+`6c1d378bf390fe93ec4618e090cc48e88bc11e98f8f92f2833863b7acd4a490d`
+remain the immutable decomposition snapshot. They are not the live selector
+after the corrected P1C parser exposes four additional ES2016
+`BindingRestElement : ... BindingPattern` roots:
+
+```text
+test/language/expressions/arrow-function/dstr/dflt-ary-ptrn-rest-ary-elem.js
+test/language/expressions/arrow-function/dstr/dflt-ary-ptrn-rest-ary-rest.js
+test/language/expressions/arrow-function/dstr/dflt-ary-ptrn-rest-obj-id.js
+test/language/expressions/arrow-function/dstr/dflt-ary-ptrn-rest-obj-prop-id.js
+```
+
+The corrected live identities are:
+
+```text
+P1R live ledger:
+254 roots / 494 variants
+sha256 3a2356b36431b3553a65289afd03eb0aa1e88a36e78b3684cfb460eaf426c4d6
+
+live decomposition including P1C and P1G:
+487 roots / 959 variants
+sha256 94467957a7d427219cfcbe301adef006052437c30a56533ef510e3dacbfbaf88
+
+remaining post-P1C selector:
+406 roots / 798 variants
+sha256 182c54ed6fbd4b290b11172809ddd5289bb45b16a07a2c1e4402b94fec2feba7
+```
+
+The four roots are post-snapshot live additions to P1R. Until P1F and P1R
+perform their final partition movement, their
+`core/blocked:early-errors-and-declaration-instantiation` classification is
+provisional. Historical 250/486, 483/951, and 402/790 figures below describe
+the immutable analysis snapshot and are superseded by these live identities
+for future authority work.
+
 ## Executive decision
 
 Do not create the generic parser/static production child anticipated by the
@@ -48,20 +86,22 @@ The exact audit found:
    Sixth Edition.
 
 The immutable 482-root ledger therefore partitions into five disjoint movement
-children. The current 483-root selector adds a sixth:
+children. The corrected live 487-root selector adds P1G and four post-snapshot
+P1R roots:
 
 | Code | Delivery          | Disposition or implementation scope                                 | Depends on | Roots | Variants | Ledger SHA-256                                                     |
 | ---- | ----------------- | ------------------------------------------------------------------- | ---------- | ----: | -------: | ------------------------------------------------------------------ |
-| P1R  | atomic taxonomy   | ES2016 `BindingRestElement : ... BindingPattern` contamination      | P1F        |   250 |      486 | `de2f75fa7dcf68a8eb00298ce05d6f2be70ffaf7efc3bec4b752ae6b2a4508ab` |
+| P1R  | atomic taxonomy   | ES2016 `BindingRestElement : ... BindingPattern` contamination      | P1F        |   254 |      494 | `3a2356b36431b3553a65289afd03eb0aa1e88a36e78b3684cfb460eaf426c4d6` |
 | P1T  | atomic taxonomy   | ES2017 trailing commas in formal parameters and calls               | P1F        |   115 |      230 | `639c946d678180f5be0b2c405c179c1c173694967cef79f25081d773ce084f68` |
 | P1A  | atomic taxonomy   | async function, `await`, async generator, and async-context grammar | P1F        |    16 |       32 | `4038da176a6b33400cba6b2524d5bf3b6d826a45ce857a7d91535c0a6bb27c88` |
 | P1X  | atomic taxonomy   | other post-ES2015 syntax dependencies                               | P1F        |    20 |       40 | `6f1acdea5f89beb9eccb2eb421002e28fbec13b6d319db1f0455fdc175db0274` |
 | P1C  | atomic production | ES2015 catch parameter binding and environment semantics            | —          |    81 |      161 | `e40f2a9c1dcd2aeb2cb56c4e3147a49d8d15275724abe002589dbbac05cb65d5` |
 | P1G  | atomic taxonomy   | ES2025 global `[[VarNames]]`/`HasVarDeclaration` removal            | P1F        |     1 |        2 | `80c9e4c41001ea0382bea315dab951927f670b5c9c32ba2db7dea6e509bd1aee` |
 
-P1R/P1T/P1A/P1X/P1C are pairwise disjoint and reconstruct the original
-482-root ledger byte-for-byte. Adding P1G reconstructs the current 483-root
-selector byte-for-byte.
+The immutable 250-root P1R snapshot together with P1T/P1A/P1X/P1C
+reconstructs the original 482-root ledger byte-for-byte. The live 254-root P1R
+ledger together with those unchanged children and P1G reconstructs the
+corrected 487-root selector byte-for-byte.
 
 The selected hierarchy also needs one zero-movement tooling child, P1F, because
 the current generic roadmap-authority projection deliberately preserves a
@@ -117,6 +157,10 @@ It produces:
 951 variants
 sha256 86eccfc0bd987ab7ef7d1dbb1201f0fccc8fbaac0bfad2186f437797014e1001
 ```
+
+That is the historical pre-P1C selector. The corrected live selector is
+487 roots / 959 variants with SHA-256
+`94467957a7d427219cfcbe301adef006052437c30a56533ef510e3dacbfbaf88`.
 
 The one exact addition is:
 
@@ -240,7 +284,7 @@ partition movement is required.
 
 ### Parser/static disposition aggregate
 
-The parser/static disposition ledger is:
+The immutable-snapshot parser/static disposition ledger is:
 
 ```text
 401 roots
@@ -248,15 +292,18 @@ The parser/static disposition ledger is:
 sha256 bbcec54ddf9556885372c20c690b104ee89de7df37f80eb1cf12d94ee3a3cf6b
 ```
 
-It is the exact union P1R + P1T + P1A + P1X. It is not a production parser
-ledger.
+It is the exact union of the 250-root P1R snapshot plus P1T/P1A/P1X. It is not
+a production parser ledger. The live P1R ledger adds the four roots named in
+the live-ledger correction above.
 
 #### P1R subfamilies
 
-| Subfamily                               | Roots |
-| --------------------------------------- | ----: |
-| Generated `... BindingPattern` contexts |   248 |
-| Direct rest-parameter pattern roots     |     2 |
+| Subfamily                                        |   Roots |
+| ------------------------------------------------ | ------: |
+| Generated `... BindingPattern` snapshot contexts |     248 |
+| Corrected post-snapshot P1C collateral contexts  |       4 |
+| Direct rest-parameter pattern roots              |       2 |
+| **Corrected live P1R total**                     | **254** |
 
 The Sixth Edition production is only:
 
@@ -306,17 +353,18 @@ one broad path rule.
 
 ### Current later-semantics aggregate
 
-Adding P1G to the parser/static disposition gives the complete current
-later/non-ES2015 movement ledger:
+Adding P1G to the corrected live parser/static disposition gives the complete
+post-P1C later/non-ES2015 movement ledger:
 
 ```text
-402 roots
-790 variants
-sha256 86c5db7f039216edd97c21dd2a116d179e44b3729b8ca3235cb6d805e71ae7d8
+406 roots
+798 variants
+sha256 182c54ed6fbd4b290b11172809ddd5289bb45b16a07a2c1e4402b94fec2feba7
 ```
 
-P1G is semantic rather than grammatical, so it is not part of the 401-root
-parser/static aggregate.
+P1G is semantic rather than grammatical. The historical 401-root
+parser/static aggregate remains an immutable snapshot; the live ledger adds
+the four P1R collateral roots.
 
 ### Runtime production aggregate
 
@@ -623,7 +671,7 @@ sha256 86c5db7f039216edd97c21dd2a116d179e44b3729b8ca3235cb6d805e71ae7d8
 **Acceptance**
 
 - Current taxonomy and all generated semantic outputs remain byte-identical.
-- P1 remains 483/951.
+- P1 remains at the corrected live 487/959 identity.
 - Tests reject missing normative evidence, unsupported partition/status pairs,
   foreign paths, partial ledgers, stale bases, duplicate decisions, and
   partition changes through old owner-only dispositions.
@@ -636,14 +684,14 @@ sha256 86c5db7f039216edd97c21dd2a116d179e44b3729b8ca3235cb6d805e71ae7d8
 **Ledger**
 
 ```text
-250 roots / 486 variants
-sha256 de2f75fa7dcf68a8eb00298ce05d6f2be70ffaf7efc3bec4b752ae6b2a4508ab
+254 roots / 494 variants
+sha256 3a2356b36431b3553a65289afd03eb0aa1e88a36e78b3684cfb460eaf426c4d6
 ```
 
 **Focused query**
 
 ```text
-path in immutable P1 ledger &&
+path in corrected live P1 ledger &&
 reviewed later dependency is ES2016 BindingRestElement "... BindingPattern"
 ```
 
@@ -651,9 +699,9 @@ reviewed later dependency is ES2016 BindingRestElement "... BindingPattern"
 
 - Complete one exact reviewed decision for every path.
 - Move each root to `later-or-non-es2015`.
-- Distinguish the 248 generated contexts from the two direct
-  `test/language/rest-parameters/` roots while applying the same normative
-  dependency.
+- Distinguish the 252 generated contexts, including the four post-snapshot P1C
+  collateral roots, from the two direct `test/language/rest-parameters/` roots
+  while applying the same normative dependency.
 
 **Non-goals**
 
@@ -666,8 +714,8 @@ reviewed later dependency is ES2016 BindingRestElement "... BindingPattern"
 
 - Exact ledger coverage, zero overlap, exact metadata closure, and normative
   Seventh Edition evidence.
-- P1 decreases by exactly 250/486.
-- Core decreases and later increases by exactly 250/486.
+- P1 decreases by exactly 254/494.
+- Core decreases and later increases by exactly 254/494.
 - No selected-subset or guest behavior change.
 
 ### P1T — ES2017 trailing-comma disposition
@@ -932,9 +980,10 @@ Every child must recompute them from its exact base and stop on drift.
 After child issue creation, #78 should:
 
 1. preserve comment `5347038305` as the immutable 482/949 base;
-2. publish a superseding current ledger comment for 483/951 with SHA-256
-   `86eccfc0bd987ab7ef7d1dbb1201f0fccc8fbaac0bfad2186f437797014e1001`;
-3. identify the one H0 delta and its exact hash;
+2. preserve the historical pre-P1C 483/951 identity as superseded analysis;
+3. publish the corrected live 487/959 ledger with SHA-256
+   `94467957a7d427219cfcbe301adef006052437c30a56533ef510e3dacbfbaf88`
+   and identify the one H0 delta plus four post-snapshot P1R additions;
 4. state that #76 and #77 are closed resolved history;
 5. replace generic parser/static/runtime wording with the named P1F/P1R/P1T/
    P1A/P1X/P1C/P1G hierarchy;
@@ -951,13 +1000,14 @@ Do not delete old dependency comments or silently rewrite the historical base.
 #78 closes only after:
 
 1. P1F and every movement child are closed with exact merge evidence;
-2. the original 482-root ledger still reconciles exactly through
-   P1R/P1T/P1A/P1X/P1C;
+2. the original 482-root ledger still reconciles exactly through the immutable
+   250-root P1R snapshot plus P1T/P1A/P1X/P1C, while the four live P1R
+   additions reconcile separately;
 3. P1G accounts for the exact one-root H0 delta;
 4. every pair of child ledgers is disjoint;
 5. the union of all movement children reconstructs the current source selector
    used for the final reclassification;
-6. all 402 later-dependent roots have independent normative review and are no
+6. all 406 later-dependent roots have independent normative review and are no
    longer in the core partition;
 7. P1C is selected-passing, or any different destination has new exact
    reviewed evidence rather than silent scope expansion;
@@ -970,7 +1020,7 @@ Do not delete old dependency comments or silently rewrite the historical base.
 
 ## Risks and required review attention
 
-1. **Denominator correction is material.** Moving 402 roots / 790 variants
+1. **Denominator correction is material.** Moving 406 roots / 798 variants
    changes the published core and later partitions. Independent specification
    and taxonomy review is mandatory.
 2. **Parser-version probing is not normative proof.** It only located the

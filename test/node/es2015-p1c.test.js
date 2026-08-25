@@ -1,8 +1,13 @@
-import { createHash } from 'node:crypto';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { assertSame, assertThrows } from '../harness/assert.js';
-import { createNodeTest262Host } from '../../tools/test262/adapters/node.js';
 import { buildEs2015Inventory } from '../../tools/test262/es2015-taxonomy.js';
+import {
+  P1C_COLLATERAL_BASE_CLASSIFICATIONS,
+  P1C_COLLATERAL_BLOCKED_CLASSIFICATIONS,
+  P1C_COLLATERAL_PATHS,
+  P1C_CORRECTED_APPLIED_RECORD_SHA256,
+} from '../../tools/test262/es2015-p1c-collateral.js';
 import { parseEs2015Promotion } from '../../tools/test262/es2015-promotion.js';
 import {
   canonicalRoadmapAuthoritySha256,
@@ -12,11 +17,7 @@ import {
   parseEs5Selection,
   matchExclusion,
 } from '../../tools/test262/es5-selection.js';
-import { readTest262HarnessDefinitions } from '../../tools/test262/harness-definitions.js';
-import {
-  assertPinnedCheckout,
-  readTest262Pin,
-} from '../../tools/test262/pin.js';
+import { readTest262Pin } from '../../tools/test262/pin.js';
 import {
   parseUpstreamSubset,
   upstreamSubsetPaths,
@@ -31,6 +32,26 @@ const EXPECTED_FEATURE_PROFILE_COUNTS = Object.freeze({
   '["destructuring-binding"]': 58,
   '["destructuring-binding","generators"]': 11,
   '["let"]': 1,
+});
+const EXPECTED_P1C_COLLATERAL_PATHS = Object.freeze([
+  'test/language/expressions/arrow-function/dstr/dflt-ary-ptrn-rest-ary-elem.js',
+  'test/language/expressions/arrow-function/dstr/dflt-ary-ptrn-rest-ary-rest.js',
+  'test/language/expressions/arrow-function/dstr/dflt-ary-ptrn-rest-obj-id.js',
+  'test/language/expressions/arrow-function/dstr/dflt-ary-ptrn-rest-obj-prop-id.js',
+]);
+const EXPECTED_P1C_COLLATERAL_CLASSIFICATION = Object.freeze({
+  variants: 2,
+  partition: 'core',
+  status: 'selected-passing',
+  blocker: null,
+  features: Object.freeze(['default-parameters', 'destructuring-binding']),
+  flags: Object.freeze(['generated']),
+  includes: Object.freeze([]),
+  provenance: Object.freeze([
+    'anchor:sec-arrow-function-definitions-runtime-semantics-evaluation',
+    'feature:default-parameters',
+    'feature:destructuring-binding',
+  ]),
 });
 
 export default [
@@ -112,6 +133,67 @@ export default [
     },
   },
   {
+    name: 'P1C collateral contract closes the exact four ES2016 roots',
+    run: async () => {
+      const { ledgerText } = await readP1CInputs();
+      const sourcePaths = new Set(ledgerText.trimEnd().split('\n'));
+
+      assertSame(
+        JSON.stringify(P1C_COLLATERAL_PATHS),
+        JSON.stringify(EXPECTED_P1C_COLLATERAL_PATHS),
+      );
+      assertSame(
+        JSON.stringify([...P1C_COLLATERAL_PATHS].sort()),
+        JSON.stringify(P1C_COLLATERAL_PATHS),
+      );
+      assertSame(new Set(P1C_COLLATERAL_PATHS).size, 4);
+      assertSame(
+        P1C_COLLATERAL_BASE_CLASSIFICATIONS.reduce(
+          (total, entry) => total + entry.variants,
+          0,
+        ),
+        8,
+      );
+      assertSame(
+        P1C_COLLATERAL_BASE_CLASSIFICATIONS.every(
+          (entry, index) =>
+            JSON.stringify(entry) ===
+            JSON.stringify({
+              path: EXPECTED_P1C_COLLATERAL_PATHS[index],
+              ...EXPECTED_P1C_COLLATERAL_CLASSIFICATION,
+            }),
+        ),
+        true,
+      );
+      assertSame(
+        P1C_COLLATERAL_BLOCKED_CLASSIFICATIONS.every((entry, index) => {
+          const base = P1C_COLLATERAL_BASE_CLASSIFICATIONS[index];
+          const stableBase = { ...base };
+          const stableBlocked = { ...entry };
+          Reflect.deleteProperty(stableBase, 'status');
+          Reflect.deleteProperty(stableBase, 'blocker');
+          Reflect.deleteProperty(stableBlocked, 'status');
+          Reflect.deleteProperty(stableBlocked, 'blocker');
+          return (
+            entry.status ===
+              'blocked:early-errors-and-declaration-instantiation' &&
+            entry.blocker === 'early-errors-and-declaration-instantiation' &&
+            JSON.stringify(stableBlocked) === JSON.stringify(stableBase)
+          );
+        }),
+        true,
+      );
+      assertSame(
+        P1C_COLLATERAL_PATHS.some((sourcePath) => sourcePaths.has(sourcePath)),
+        false,
+      );
+      assertSame(
+        P1C_CORRECTED_APPLIED_RECORD_SHA256,
+        '64db02e17f5d7e7f26805eee912d625b53a989e4c4ae17b15165bea3118bfefa',
+      );
+    },
+  },
+  {
     name: 'P1C ledger verification rejects reviewed taxonomy drift',
     run: async () => {
       const { verifyP1CLedger } = await loadP1C();
@@ -159,10 +241,13 @@ export default [
     run: async () => {
       const { verifyP1CLedger } = await loadP1C();
       const { ledgerText, taxonomy, selection, subset } = await readP1CInputs();
-      const inventory = await readPinnedP1CInventory(ledgerText, taxonomy);
+      const pin = await readTest262Pin(REPOSITORY_ROOT);
+      const inventory = syntheticP1CInventory(ledgerText, taxonomy);
       const paths = verifyP1CLedger(ledgerText, taxonomy);
       const selected = new Set(upstreamSubsetPaths(subset));
 
+      assertSame(taxonomy.pin.repository, pin.repository);
+      assertSame(taxonomy.pin.revision, pin.revision);
       assertSame(inventory.length, 81);
       assertSame(
         inventory.reduce((sum, root) => sum + root.variants, 0),
@@ -204,6 +289,18 @@ export default [
         paths.filter((sourcePath) => selected.has(sourcePath)).length,
         0,
       );
+
+      const unknownInclude = /** @type {any} */ (structuredClone(taxonomy));
+      findClassification(unknownInclude, paths[0]).includes = [
+        'unknown-p1c-helper.js',
+      ];
+      assertSame(
+        assertThrows(
+          () => syntheticP1CInventory(ledgerText, unknownInclude),
+          Error,
+        ).message,
+        'ES2015 include unknown-p1c-helper.js is unknown',
+      );
     },
   },
   {
@@ -229,6 +326,58 @@ export default [
         80,
       );
       assertSame(listTestsCalled, false);
+    },
+  },
+  {
+    name: 'focused P1C collateral runner records only the exact expected parse failures',
+    run: async () => {
+      const { document, listTestsCalled } = await runFixtureP1CCollateral();
+
+      assertSame(Object.keys(document).join(','), 'version,paths,records');
+      assertSame(
+        JSON.stringify(document.paths),
+        JSON.stringify(EXPECTED_P1C_COLLATERAL_PATHS),
+      );
+      assertSame(document.records.length, 8);
+      assertSame(
+        document.records.every(
+          (record, index) =>
+            record.file ===
+              EXPECTED_P1C_COLLATERAL_PATHS[Math.floor(index / 2)] &&
+            record.variant === (index % 2 === 0 ? 'non-strict' : 'strict') &&
+            record.status === 'failed' &&
+            record.reason === 'parse-error' &&
+            record.message ===
+              'SyntaxError: rest elements are not supported in this context',
+        ),
+        true,
+      );
+      assertSame(listTestsCalled, false);
+
+      let metadataMessage = '';
+      try {
+        await runFixtureP1CCollateral({
+          metadataDriftPath: EXPECTED_P1C_COLLATERAL_PATHS[0],
+        });
+      } catch (error) {
+        metadataMessage =
+          error instanceof Error ? error.message : String(error);
+      }
+      assertSame(
+        metadataMessage,
+        `P1C collateral metadata drift: ${EXPECTED_P1C_COLLATERAL_PATHS[0]}`,
+      );
+
+      let passingMessage = '';
+      try {
+        await runFixtureP1CCollateral({ outcome: 'passed' });
+      } catch (error) {
+        passingMessage = error instanceof Error ? error.message : String(error);
+      }
+      assertSame(
+        passingMessage,
+        `P1C collateral execution drift: ${EXPECTED_P1C_COLLATERAL_PATHS[0]} (non-strict)`,
+      );
     },
   },
   {
@@ -529,6 +678,7 @@ export default [
       const inputs = await readP1CProjectionInputs();
       const taxonomy = JSON.parse(inputs.taxonomyText);
       const execution = syntheticP1CExecution(inputs.ledgerText, taxonomy);
+      const collateralExecution = syntheticP1CCollateralExecution();
       const inventory = syntheticP1CInventory(inputs.ledgerText, taxonomy);
       const evidence = buildP1CAuthorityEvidence({
         ledgerText: inputs.ledgerText,
@@ -542,6 +692,7 @@ export default [
         subsetText: inputs.subsetText,
         evidence,
         execution,
+        collateralExecution,
         inventory,
       });
       const repeated = projectP1CCoreOutputs({
@@ -550,6 +701,7 @@ export default [
         subsetText: inputs.subsetText,
         evidence,
         execution,
+        collateralExecution,
         inventory,
       });
 
@@ -560,6 +712,7 @@ export default [
       assertSame(JSON.stringify(projected), JSON.stringify(repeated));
 
       const sourcePaths = new Set(evidence.paths);
+      const collateralPaths = new Set(P1C_COLLATERAL_PATHS);
       const baseAudit = JSON.parse(inputs.auditEvidenceText);
       const headAudit = JSON.parse(projected.auditEvidenceText);
       const projectedSourceRecords = headAudit.auditRecords.filter(
@@ -573,14 +726,34 @@ export default [
         true,
       );
       assertSame(
+        baseAudit.auditRecords.some((/** @type {any} */ record) =>
+          collateralPaths.has(record.file),
+        ),
+        false,
+      );
+      const projectedCollateralRecords = headAudit.auditRecords.filter(
+        (/** @type {any} */ record) => collateralPaths.has(record.file),
+      );
+      assertSame(projectedCollateralRecords.length, 8);
+      assertSame(
+        projectedCollateralRecords.every(
+          (/** @type {any} */ record) => record.status === 'failed',
+        ),
+        true,
+      );
+      assertSame(
         JSON.stringify(
           headAudit.auditRecords.filter(
-            (/** @type {any} */ record) => !sourcePaths.has(record.file),
+            (/** @type {any} */ record) =>
+              !sourcePaths.has(record.file) &&
+              !collateralPaths.has(record.file),
           ),
         ),
         JSON.stringify(
           baseAudit.auditRecords.filter(
-            (/** @type {any} */ record) => !sourcePaths.has(record.file),
+            (/** @type {any} */ record) =>
+              !sourcePaths.has(record.file) &&
+              !collateralPaths.has(record.file),
           ),
         ),
       );
@@ -594,6 +767,18 @@ export default [
         ),
         true,
       );
+      assertSame(
+        P1C_COLLATERAL_PATHS.every(
+          (sourcePath) =>
+            !Object.prototype.hasOwnProperty.call(
+              baseAudit.blockers,
+              sourcePath,
+            ) &&
+            headAudit.blockers[sourcePath] ===
+              'early-errors-and-declaration-instantiation',
+        ),
+        true,
+      );
 
       const baseTaxonomy = JSON.parse(inputs.taxonomyText);
       const baseByPath = new Map(
@@ -604,8 +789,22 @@ export default [
       );
       const headTaxonomy = JSON.parse(projected.taxonomyText);
       let selectedRoots = 0;
+      let blockedCollateralRoots = 0;
       for (const entry of headTaxonomy.classifications) {
         const base = baseByPath.get(entry.path);
+        if (collateralPaths.has(entry.path)) {
+          const index = P1C_COLLATERAL_PATHS.indexOf(entry.path);
+          assertSame(
+            JSON.stringify(base),
+            JSON.stringify(P1C_COLLATERAL_BASE_CLASSIFICATIONS[index]),
+          );
+          assertSame(
+            JSON.stringify(entry),
+            JSON.stringify(P1C_COLLATERAL_BLOCKED_CLASSIFICATIONS[index]),
+          );
+          blockedCollateralRoots += 1;
+          continue;
+        }
         if (!sourcePaths.has(entry.path)) {
           assertSame(JSON.stringify(entry), JSON.stringify(base));
           continue;
@@ -622,6 +821,7 @@ export default [
         selectedRoots += 1;
       }
       assertSame(selectedRoots, 81);
+      assertSame(blockedCollateralRoots, 4);
 
       const baseSubset = parseUpstreamSubset(inputs.subsetText);
       const headSubset = parseUpstreamSubset(projected.subsetText);
@@ -636,8 +836,67 @@ export default [
       assertSame(headSubset.groups.length, baseSubset.groups.length + 1);
       assertSame(
         upstreamSubsetPaths(headSubset).length,
-        upstreamSubsetPaths(baseSubset).length + 81,
+        upstreamSubsetPaths(baseSubset).length + 77,
       );
+      assertSame(
+        P1C_COLLATERAL_PATHS.some((sourcePath) =>
+          upstreamSubsetPaths(headSubset).includes(sourcePath),
+        ),
+        false,
+      );
+
+      /** @type {Array<(document: any) => void>} */
+      const hostileExecutions = [
+        (document) => {
+          document.paths.reverse();
+        },
+        (document) => {
+          document.records.pop();
+        },
+        (document) => {
+          document.records[1] = structuredClone(document.records[0]);
+        },
+        (document) => {
+          document.records[0].file = 'test/language/expressions/foreign.js';
+        },
+        (document) => {
+          document.records[0].variant = 'strict';
+        },
+        (document) => {
+          document.records[0].status = 'passed';
+        },
+        (document) => {
+          document.records[0].reason = 'unexpected-throw';
+        },
+        (document) => {
+          document.records[0].message = 'SyntaxError: drift';
+        },
+        (document) => {
+          document.records[0].features = ['destructuring-binding'];
+        },
+      ];
+      for (const mutate of hostileExecutions) {
+        const hostile = /** @type {any} */ (
+          structuredClone(collateralExecution)
+        );
+        mutate(hostile);
+        assertSame(
+          assertThrows(
+            () =>
+              projectP1CCoreOutputs({
+                taxonomyText: inputs.taxonomyText,
+                auditEvidenceText: inputs.auditEvidenceText,
+                subsetText: inputs.subsetText,
+                evidence,
+                execution,
+                collateralExecution: hostile,
+                inventory,
+              }),
+            Error,
+          ).message.includes('P1C collateral execution'),
+          true,
+        );
+      }
     },
   },
   {
@@ -651,6 +910,7 @@ export default [
       const inputs = await readP1CProjectionInputs();
       const taxonomy = JSON.parse(inputs.taxonomyText);
       const execution = syntheticP1CExecution(inputs.ledgerText, taxonomy);
+      const collateralExecution = syntheticP1CCollateralExecution();
       const inventory = syntheticP1CInventory(inputs.ledgerText, taxonomy);
       const evidence = buildP1CAuthorityEvidence({
         ledgerText: inputs.ledgerText,
@@ -664,6 +924,7 @@ export default [
         subsetText: inputs.subsetText,
         evidence,
         execution,
+        collateralExecution,
         inventory,
       });
       const artifacts = buildP1CReportArtifacts({
@@ -723,6 +984,21 @@ export default [
         }),
         true,
       );
+      assertSame(
+        reportRecords.some(
+          (/** @type {any} */ record) =>
+            record.type === 'test' &&
+            P1C_COLLATERAL_PATHS.includes(record.file),
+        ),
+        false,
+      );
+      const summary = reportRecords.find(
+        (/** @type {any} */ record) => record.type === 'summary',
+      );
+      assertSame(summary?.total, 39292);
+      assertSame(summary?.passed, 39292);
+      assertSame(summary?.failed, 0);
+      assertSame(summary?.skipped, 0);
       /** @param {string} text */
       const stripCoverage = (text) =>
         text.replace(
@@ -732,6 +1008,54 @@ export default [
       assertSame(
         stripCoverage(artifacts.conformanceText),
         stripCoverage(inputs.conformanceText),
+      );
+
+      const baseReportRecords = inputs.reportText
+        .trimEnd()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      /**
+       * @param {(records: any[]) => void} mutate
+       */
+      const expectCollateralReportRejected = (mutate) => {
+        const records = structuredClone(baseReportRecords);
+        mutate(records);
+        return assertThrows(
+          () =>
+            buildP1CReportArtifacts({
+              reportText: `${records.map((record) => JSON.stringify(record)).join('\n')}\n`,
+              conformanceText: inputs.conformanceText,
+              subsetText: projected.subsetText,
+              taxonomyText: projected.taxonomyText,
+              auditEvidenceText: projected.auditEvidenceText,
+              promotionText: renderP1CJson(evidence.promotion),
+              featuresText: inputs.featuresText,
+            }),
+          Error,
+        );
+      };
+      const firstCollateral = (/** @type {any[]} */ records) =>
+        records.find(
+          (record) =>
+            record.type === 'test' && record.file === P1C_COLLATERAL_PATHS[0],
+        );
+      assertSame(
+        expectCollateralReportRejected((records) => {
+          firstCollateral(records).status = 'failed';
+        }).message.includes('collateral'),
+        true,
+      );
+      assertSame(
+        expectCollateralReportRejected((records) => {
+          firstCollateral(records).features = ['destructuring-binding'];
+        }).message.includes('collateral'),
+        true,
+      );
+      assertSame(
+        expectCollateralReportRejected((records) => {
+          records.splice(records.indexOf(firstCollateral(records)), 1);
+        }).message.includes('collateral'),
+        true,
       );
     },
   },
@@ -747,6 +1071,7 @@ export default [
       const inputs = await readP1CProjectionInputs();
       const taxonomy = JSON.parse(inputs.taxonomyText);
       const execution = syntheticP1CExecution(inputs.ledgerText, taxonomy);
+      const collateralExecution = syntheticP1CCollateralExecution();
       const inventory = syntheticP1CInventory(inputs.ledgerText, taxonomy);
       const evidence = buildP1CAuthorityEvidence({
         ledgerText: inputs.ledgerText,
@@ -760,6 +1085,7 @@ export default [
         subsetText: inputs.subsetText,
         evidence,
         execution,
+        collateralExecution,
         inventory,
       });
       const artifacts = buildP1CReportArtifacts({
@@ -812,13 +1138,13 @@ export default [
         authority.protectedOutputs.filter(
           (output) => output.operation === 'replace-exact',
         ).length,
-        1,
+        3,
       );
       assertSame(
         authority.protectedOutputs.filter(
           (output) => output.operation === 'project',
         ).length,
-        4,
+        2,
       );
       assertSame(authority.destinations.length, 1);
       assertSame(authority.destinations[0].status, 'selected-passing');
@@ -846,23 +1172,21 @@ export default [
       const { main } = await loadP1C();
       const inputs = await readP1CProjectionInputs();
       const taxonomy = JSON.parse(inputs.taxonomyText);
-      const executionPath =
-        '.superpowers/sdd/2026-08-23-p1c-catch-binding/task-5/unit-execution.json';
-      const outputPath =
-        '.superpowers/sdd/2026-08-23-p1c-catch-binding/task-5/unit-authority';
-      const outputUrl = new URL(outputPath, REPOSITORY_ROOT);
-      const executionUrl = new URL(executionPath, REPOSITORY_ROOT);
+      const fixturePath = `.superpowers/test/es2015-p1c-${randomUUID()}`;
+      const fixtureUrl = new URL(`${fixturePath}/`, REPOSITORY_ROOT);
+      const executionPath = `${fixturePath}/unit-execution.json`;
+      const outputPath = `${fixturePath}/unit-authority`;
       const sourceByPath = syntheticP1CSources(inputs.ledgerText, taxonomy);
-      const status = await (async () => {
-        await rm(outputUrl, { recursive: true, force: true });
-        await rm(executionUrl, { force: true });
-        await writeFile(
-          executionUrl,
-          renderP1CJson(syntheticP1CExecution(inputs.ledgerText, taxonomy)),
-          'utf8',
-        );
+      let collateralRuns = 0;
+      const result = await (async () => {
+        await mkdir(fixtureUrl, { recursive: true });
         try {
-          return await main(
+          await writeFile(
+            new URL('unit-execution.json', fixtureUrl),
+            renderP1CJson(syntheticP1CExecution(inputs.ledgerText, taxonomy)),
+            'utf8',
+          );
+          const status = await main(
             [
               '--build-scratch',
               '--ledger=tools/test262/es2015-p1c-paths.txt',
@@ -886,15 +1210,87 @@ export default [
               },
               readIncludeDefinitions: async () =>
                 syntheticP1CIncludeDefinitions(),
+              runCollateralFocused: async () => {
+                collateralRuns += 1;
+                return syntheticP1CCollateralExecution();
+              },
             },
           );
+          const collateralText = await readFile(
+            new URL('unit-authority/collateral-execution.json', fixtureUrl),
+            'utf8',
+          );
+          const authorityText = await readFile(
+            new URL('unit-authority/authority-record.json', fixtureUrl),
+            'utf8',
+          );
+          const summary = JSON.parse(
+            await readFile(
+              new URL('unit-authority/summary.json', fixtureUrl),
+              'utf8',
+            ),
+          );
+          return { status, collateralText, authorityText, summary };
         } finally {
-          await rm(outputUrl, { recursive: true, force: true });
-          await rm(executionUrl, { force: true });
+          await rm(fixtureUrl, { recursive: true, force: true });
         }
       })();
 
-      assertSame(status, 0);
+      assertSame(result.status, 0);
+      assertSame(collateralRuns, 1);
+      assertSame(
+        result.collateralText,
+        renderP1CJson(syntheticP1CCollateralExecution()),
+      );
+      assertSame(result.summary.collateral.roots, P1C_COLLATERAL_PATHS.length);
+      assertSame(result.summary.collateral.variants, 8);
+      assertSame(result.summary.collateral.failed, 8);
+      assertSame(
+        result.summary.collateral.sha256,
+        sha256(result.collateralText),
+      );
+      assertSame(
+        sha256(result.authorityText),
+        '62e26cc29ffeab0e67899c968f3ccb974dd663ee8b2beadd5c2a31ddbce2373f',
+      );
+      assertSame(
+        canonicalRoadmapAuthoritySha256(JSON.parse(result.authorityText)),
+        '95036226ee50e365b03c823bab751c6e1d646af0d5c6352a199cd442e2aa9278',
+      );
+      assertSame(
+        result.summary.authoritySha256,
+        '95036226ee50e365b03c823bab751c6e1d646af0d5c6352a199cd442e2aa9278',
+      );
+      assertSame(
+        result.summary.protectedProjectionSha256,
+        '6e92772f4eb42ecaef7f673f243ecdd689b73bc1e9a7a3a545150c2f8630a813',
+      );
+      assertSame(
+        result.summary.fileSha256[
+          'projected/tools/test262/es2015-audit-evidence.json'
+        ],
+        '50f9a54346d0e9e5168a6ac6b0b8de6d709e2c5b808d6c8b036e5113612e638c',
+      );
+      assertSame(
+        result.summary.fileSha256[
+          'projected/tools/test262/es2015-taxonomy.json'
+        ],
+        'fdf3c8bf229f6c841209e4c4a2196001d45cf0a1c270f334cf06e5f54a00f3c7',
+      );
+      assertSame(
+        result.summary.fileSha256[
+          'projected/tools/test262/upstream-subset.json'
+        ],
+        '5a5b83b3c28991c5f2ac141ed949a9698966cce85587d671a4417228d5e08b14',
+      );
+      assertSame(
+        result.summary.fileSha256['projected/docs/test262-report.jsonl'],
+        '89002c4b597748a53ccc4ea60df25d981660f4311cee1e933f95fd13b39e69ff',
+      );
+      assertSame(
+        result.summary.fileSha256['projected/docs/conformance.md'],
+        '9cc4250ed8a69e7d62e82ad7452bb2563c319856ed97a53bd00b96d0017c6cfe',
+      );
     },
   },
 ];
@@ -964,29 +1360,6 @@ async function readP1CProjectionInputs() {
 }
 
 /**
- * @param {string} ledgerText
- * @param {{ classifications?: readonly any[] }} taxonomy
- */
-async function readPinnedP1CInventory(ledgerText, taxonomy) {
-  const { buildP1CInventory } = await loadP1C();
-  const pin = await readTest262Pin(REPOSITORY_ROOT);
-  await assertPinnedCheckout(pin, REPOSITORY_ROOT);
-  const host = createNodeTest262Host({
-    root: new URL(`${pin.checkoutPath.replace(/\/$/u, '')}/`, REPOSITORY_ROOT),
-  });
-  const includeDefinitions = await readTest262HarnessDefinitions(
-    pin.checkoutPath,
-    REPOSITORY_ROOT,
-  );
-  return buildP1CInventory({
-    ledgerText,
-    taxonomy,
-    readRoot: (sourcePath) => host.readTest(sourcePath),
-    includeDefinitions,
-  });
-}
-
-/**
  * @param {{
  *   environment?: Record<string, string | undefined>,
  *   failPath?: string,
@@ -1043,6 +1416,69 @@ async function runFixtureP1C(options = {}) {
     ledgerText,
     taxonomy,
     pin: options.pin ?? taxonomy.pin,
+    host,
+    engine,
+  });
+  return { document, listTestsCalled };
+}
+
+/**
+ * @param {{
+ *   metadataDriftPath?: string,
+ *   outcome?: 'failed' | 'passed',
+ * }} [options]
+ */
+async function runFixtureP1CCollateral(options = {}) {
+  const { runP1CCollateralFocused } = await loadP1C();
+  let listTestsCalled = false;
+  const host = {
+    /** @param {string} file */
+    readTest(file) {
+      if (!EXPECTED_P1C_COLLATERAL_PATHS.includes(file)) {
+        throw new Error(`foreign P1C collateral fixture path: ${file}`);
+      }
+      const features =
+        options.metadataDriftPath === file
+          ? ['destructuring-binding']
+          : ['destructuring-binding', 'default-parameters'];
+      return [
+        '/*---',
+        'description: focused P1C collateral runner fixture',
+        `features: ${JSON.stringify(features)}`,
+        'flags: [generated]',
+        '---*/',
+        'P1C_COLLATERAL_FIXTURE;',
+      ].join('\n');
+    },
+    readInclude() {
+      return '';
+    },
+    readModule() {
+      throw new Error('P1C collateral fixture does not use modules');
+    },
+    listTests() {
+      listTestsCalled = true;
+      throw new Error('P1C collateral fixture must not list tests');
+    },
+  };
+  const engine = {
+    createRealm() {
+      return {};
+    },
+    installHostBindings() {},
+    /** @param {any} _realm @param {string} source */
+    evaluateScript(_realm, source) {
+      if (
+        options.outcome === 'passed' ||
+        !source.includes('P1C_COLLATERAL_FIXTURE')
+      ) {
+        return { type: 'normal', value: undefined };
+      }
+      throw new SyntaxError('rest elements are not supported in this context');
+    },
+  };
+  const document = await runP1CCollateralFocused({
+    environment: { TZ: 'UTC' },
     host,
     engine,
   });
@@ -1181,6 +1617,24 @@ function syntheticP1CInventory(ledgerText, taxonomy) {
     }),
     includeDefinitions: syntheticP1CIncludeDefinitions(),
   });
+}
+
+function syntheticP1CCollateralExecution() {
+  return {
+    version: /** @type {const} */ (1),
+    paths: [...EXPECTED_P1C_COLLATERAL_PATHS],
+    records: EXPECTED_P1C_COLLATERAL_PATHS.flatMap((file) =>
+      ['non-strict', 'strict'].map((variant) => ({
+        type: /** @type {const} */ ('test'),
+        file,
+        variant: /** @type {'non-strict' | 'strict'} */ (variant),
+        status: /** @type {const} */ ('failed'),
+        reason: /** @type {const} */ ('parse-error'),
+        message: 'SyntaxError: rest elements are not supported in this context',
+        features: ['default-parameters', 'destructuring-binding'],
+      })),
+    ),
+  };
 }
 
 /**

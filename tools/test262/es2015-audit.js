@@ -29,10 +29,17 @@ import {
 import {
   ES2015_PROVENANCE_DECISION_CODES,
   ES2015_PROVENANCE_FILE,
+  canonicalRoadmapAuthoritySha256,
   parseEs2015DecisionFragment,
   parseEs2015ProvenanceManifest,
   validateDecisionFragments,
 } from './es2015-provenance.js';
+import {
+  P1C_COLLATERAL_BASE_CLASSIFICATIONS,
+  P1C_COLLATERAL_BLOCKED_CLASSIFICATIONS,
+  P1C_COLLATERAL_PATHS,
+  P1C_CORRECTED_APPLIED_RECORD_SHA256,
+} from './es2015-p1c-collateral.js';
 import {
   assertExactH0DispositionDelta,
   assertEs2015H0BaselineMatchesTaxonomy,
@@ -283,6 +290,19 @@ export async function main(argv = [], dependencies = {}) {
     (/** @type {any} */ authority) =>
       authority.code === 'M1' && authority.state === 'applied',
   );
+  const p1cAuthority = roadmapAuthorities.find(
+    (/** @type {any} */ authority) =>
+      authority.code === 'P1C' && authority.state === 'applied',
+  );
+  if (
+    p1cAuthority !== undefined &&
+    canonicalRoadmapAuthoritySha256(p1cAuthority) !==
+      P1C_CORRECTED_APPLIED_RECORD_SHA256
+  ) {
+    throw new Es2015AuditError(
+      'Applied P1C audit serialization requires the exact corrected authority',
+    );
+  }
   const m1DispositionText =
     m1Authority === undefined
       ? null
@@ -541,8 +561,8 @@ export async function main(argv = [], dependencies = {}) {
     reportText,
     auditEvidenceText,
     promotionText,
-    p1cDispositionText,
-    p1cPromotionText,
+    p1cDispositionText: p1cAuthority === undefined ? p1cDispositionText : null,
+    p1cPromotionText: p1cAuthority === undefined ? p1cPromotionText : null,
     m1PromotionText,
     h0DispositionText,
     h0PromotionText,
@@ -798,6 +818,11 @@ async function taxonomyBeforeAppliedRoadmapAuthorities(options) {
   let taxonomyText = options.afterTaxonomyText;
   for (const evidence of [
     {
+      code: 'P1C',
+      baselinePath: 'tools/test262/es2015-p1c-baseline.json',
+      dispositionPath: 'tools/test262/es2015-p1c-disposition.json',
+    },
+    {
       code: 'M1',
       baselinePath: 'tools/test262/es2015-m1-baseline.json',
       dispositionPath: 'tools/test262/es2015-m1-disposition.json',
@@ -819,6 +844,9 @@ async function taxonomyBeforeAppliedRoadmapAuthorities(options) {
       authority,
       ...evidence,
     });
+    if (evidence.code === 'P1C') {
+      taxonomyText = reverseP1CCollateralTaxonomy(taxonomyText, authority);
+    }
   }
   return taxonomyText;
 }
@@ -931,6 +959,90 @@ async function taxonomyBeforeAppliedRoadmapAuthority(options) {
       (/** @type {any} */ entry) => baselineByPath.get(entry.path) ?? entry,
     ),
   })}\n`;
+}
+
+/**
+ * @param {string} taxonomyText
+ * @param {Record<string, any>} authority
+ */
+export function reverseP1CCollateralTaxonomy(taxonomyText, authority) {
+  let authoritySha256 = null;
+  if (authority?.code === 'P1C' && authority?.state === 'applied') {
+    try {
+      authoritySha256 = canonicalRoadmapAuthoritySha256(authority);
+    } catch {
+      authoritySha256 = null;
+    }
+  }
+  if (authoritySha256 !== P1C_CORRECTED_APPLIED_RECORD_SHA256) {
+    throw new Es2015AuditError(
+      'Applied P1C collateral reversal requires the exact corrected authority',
+    );
+  }
+
+  let taxonomy;
+  try {
+    taxonomy = JSON.parse(taxonomyText);
+  } catch {
+    throw new Es2015AuditError(
+      'P1C collateral taxonomy requires valid JSON classifications',
+    );
+  }
+  if (!Array.isArray(taxonomy?.classifications)) {
+    throw new Es2015AuditError(
+      'P1C collateral taxonomy requires exact classifications',
+    );
+  }
+
+  let nextCollateral = 0;
+  const classifications = taxonomy.classifications.map(
+    (/** @type {any} */ entry) => {
+      const collateralIndex = P1C_COLLATERAL_PATHS.indexOf(entry?.path);
+      if (collateralIndex !== -1) {
+        if (
+          collateralIndex !== nextCollateral ||
+          JSON.stringify(entry) !==
+            JSON.stringify(
+              P1C_COLLATERAL_BLOCKED_CLASSIFICATIONS[collateralIndex],
+            )
+        ) {
+          throw new Es2015AuditError(
+            `P1C collateral taxonomy classification drift: ${String(
+              entry?.path,
+            )}`,
+          );
+        }
+        nextCollateral += 1;
+        return P1C_COLLATERAL_BASE_CLASSIFICATIONS[collateralIndex];
+      }
+      if (isP1CCollateralShapedClassification(entry)) {
+        throw new Es2015AuditError(
+          `P1C collateral taxonomy has an extra path: ${String(entry?.path)}`,
+        );
+      }
+      return entry;
+    },
+  );
+  if (nextCollateral !== P1C_COLLATERAL_PATHS.length) {
+    throw new Es2015AuditError(
+      'P1C collateral taxonomy does not contain the exact four paths',
+    );
+  }
+  return `${JSON.stringify({ classifications }, null, 2)}\n`;
+}
+
+/** @param {Record<string, any>} entry */
+function isP1CCollateralShapedClassification(entry) {
+  if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+    return false;
+  }
+  const shape = { ...entry };
+  Reflect.deleteProperty(shape, 'path');
+  return P1C_COLLATERAL_BLOCKED_CLASSIFICATIONS.some((classification) => {
+    const expectedShape = { ...classification };
+    Reflect.deleteProperty(expectedShape, 'path');
+    return JSON.stringify(shape) === JSON.stringify(expectedShape);
+  });
 }
 
 /** @param {Record<string, any>} entry */

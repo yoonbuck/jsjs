@@ -23,6 +23,11 @@ import {
   parseEs2015Promotion,
   promotionPaths,
 } from './es2015-promotion.js';
+import {
+  P1C_COLLATERAL_BASE_CLASSIFICATIONS,
+  P1C_COLLATERAL_BLOCKED_CLASSIFICATIONS,
+  P1C_COLLATERAL_PATHS,
+} from './es2015-p1c-collateral.js';
 import { serializeUpstreamSubset } from './es5-selection.js';
 import {
   buildEs2015Inventory,
@@ -71,13 +76,12 @@ const P1C_EVIDENCE_PATHS = Object.freeze([
   'tools/test262/es2015-p1c-paths.json',
   'tools/test262/es2015-p1c-promotion.json',
 ]);
-const P1C_PROJECT_PATHS = Object.freeze([
-  CONFORMANCE_FILE,
-  REPORT_FILE,
+const P1C_PROJECT_PATHS = Object.freeze([CONFORMANCE_FILE, REPORT_FILE]);
+const P1C_REPLACE_PATHS = Object.freeze([
+  AUDIT_EVIDENCE_FILE,
   TAXONOMY_FILE,
   SUBSET_FILE,
 ]);
-const P1C_REPLACE_PATHS = Object.freeze([AUDIT_EVIDENCE_FILE]);
 const P1C_PROTECTED_OUTPUT_PATHS = Object.freeze([
   ...P1C_PROJECT_PATHS,
   ...P1C_REPLACE_PATHS,
@@ -115,12 +119,18 @@ export const P1C = Object.freeze({
  *   status: 'passed' | 'failed' | 'skipped',
  *   reason?: string,
  *   message?: string,
+ *   features?: readonly string[],
  * }} P1CExecutionRecord
  * @typedef {{
  *   version: 1,
  *   ledger: { roots: number, variants: number, sha256: string },
  *   records: readonly P1CExecutionRecord[],
  * }} P1CExecution
+ * @typedef {{
+ *   version: 1,
+ *   paths: readonly string[],
+ *   records: readonly P1CExecutionRecord[],
+ * }} P1CCollateralExecution
  * @typedef {{
  *   buildScratch: boolean,
  *   ledger: string,
@@ -324,6 +334,69 @@ export async function runP1CFocused(options) {
 
 /**
  * @param {{
+ *   environment?: Record<string, string | undefined>,
+ *   host: import('./runner.js').Test262Host,
+ *   engine: import('./runner.js').Test262Engine,
+ *   supportedFeatures?: readonly string[],
+ * }} options
+ * @returns {Promise<P1CCollateralExecution>}
+ */
+export async function runP1CCollateralFocused(options) {
+  const environment = options?.environment ?? process.env;
+  if (environment.TZ !== 'UTC') {
+    throw new Error('Focused P1C collateral Test262 execution requires TZ=UTC');
+  }
+  if (options?.host === undefined || options?.engine === undefined) {
+    throw new Error(
+      'Focused P1C collateral execution requires a Test262 host and engine',
+    );
+  }
+
+  const byPath = new Map(
+    P1C_COLLATERAL_BASE_CLASSIFICATIONS.map((entry) => [entry.path, entry]),
+  );
+  const supportedFeatures = new Set(options.supportedFeatures ?? []);
+  const { records } = await runTest262Suite({
+    engine: options.engine,
+    host: options.host,
+    paths: P1C_COLLATERAL_PATHS,
+    supportedFeaturesForPath(file, metadata) {
+      const entry = byPath.get(file);
+      if (
+        entry === undefined ||
+        !sameStrings(metadata.features, entry.features) ||
+        !sameStrings(metadata.flags, entry.flags) ||
+        !sameStrings(metadata.includes, entry.includes)
+      ) {
+        throw new Error(`P1C collateral metadata drift: ${file}`);
+      }
+      if (
+        options.supportedFeatures !== undefined &&
+        metadata.features.some((feature) => !supportedFeatures.has(feature))
+      ) {
+        throw new Error(`P1C collateral feature manifest drift: ${file}`);
+      }
+      return [...metadata.features];
+    },
+    reportFeaturesForPath(file) {
+      const entry = byPath.get(file);
+      if (entry === undefined) {
+        throw new Error(`P1C collateral metadata drift: ${file}`);
+      }
+      return [...entry.features];
+    },
+  });
+  const document = {
+    version: /** @type {const} */ (1),
+    paths: P1C_COLLATERAL_PATHS,
+    records,
+  };
+  validateP1CCollateralExecution(document);
+  return document;
+}
+
+/**
+ * @param {{
  *   ledgerText: string,
  *   taxonomyText: string,
  *   execution: any,
@@ -418,10 +491,20 @@ export function buildP1CAuthorityEvidence(options) {
  *   subsetText: string,
  *   evidence: ReturnType<typeof buildP1CAuthorityEvidence>,
  *   execution: any,
+ *   collateralExecution: P1CCollateralExecution,
  *   inventory: readonly any[],
  * }} options
  */
 export function projectP1CCoreOutputs(options) {
+  const collateralRecords = validateP1CCollateralExecution(
+    options.collateralExecution,
+  ).map((record) =>
+    createTestRecord({
+      file: record.file,
+      variant: record.variant,
+      status: 'failed',
+    }),
+  );
   const expectedEvidence = buildP1CAuthorityEvidence({
     ledgerText: `${options.evidence.paths.join('\n')}\n`,
     taxonomyText: options.taxonomyText,
@@ -454,26 +537,46 @@ export function projectP1CCoreOutputs(options) {
     /** @type {{ version: number, repository: string, revision: string, auditRecords: P1CExecutionRecord[], blockers: Record<string, string>, intentionalDeviations: readonly string[] }} */ (
       JSON.parse(options.auditEvidenceText)
     );
+  const collateralPathSet = new Set(P1C_COLLATERAL_PATHS);
+  if (
+    baseAudit.auditRecords.some((record) =>
+      collateralPathSet.has(record.file),
+    ) ||
+    P1C_COLLATERAL_PATHS.some((sourcePath) =>
+      Object.prototype.hasOwnProperty.call(baseAudit.blockers, sourcePath),
+    )
+  ) {
+    throw new Error('P1C collateral audit requires an unmodified BASE');
+  }
   const consumedExecution = new Set();
-  const auditRecords = baseAudit.auditRecords.map((record) => {
-    const key = `${record.file}\u0000${record.variant ?? ''}`;
-    const execution = executionByKey.get(key);
-    if (execution === undefined) return record;
-    consumedExecution.add(key);
-    return execution;
-  });
+  const auditRecords = [
+    ...baseAudit.auditRecords.map((record) => {
+      const key = `${record.file}\u0000${record.variant ?? ''}`;
+      const execution = executionByKey.get(key);
+      if (execution === undefined) return record;
+      consumedExecution.add(key);
+      return execution;
+    }),
+    ...collateralRecords,
+  ].sort((left, right) =>
+    compareStrings(
+      `${left.file}\u0000${left.variant ?? ''}`,
+      `${right.file}\u0000${right.variant ?? ''}`,
+    ),
+  );
   if (consumedExecution.size !== P1C.variants) {
     throw new Error('P1C audit projection lacks exact BASE audit variants');
   }
   const blockers = Object.fromEntries(
-    Object.entries(baseAudit.blockers)
-      .filter(
+    [
+      ...Object.entries(baseAudit.blockers).filter(
         ([sourcePath]) =>
           !options.evidence.disposition.destinations.some(
             (destination) => destination.path === sourcePath,
           ),
-      )
-      .sort(([left], [right]) => compareStrings(left, right)),
+      ),
+      ...P1C_COLLATERAL_PATHS.map((sourcePath) => [sourcePath, P1C_BLOCKER]),
+    ].sort(([left], [right]) => compareStrings(left, right)),
   );
   const auditEvidenceText = renderP1CJson({
     version: baseAudit.version,
@@ -485,9 +588,39 @@ export function projectP1CCoreOutputs(options) {
   });
 
   const promotionText = renderP1CJson(options.evidence.promotion);
+  const baseSubset = parseUpstreamSubset(options.subsetText);
+  const collateralSubsetCounts = new Map(
+    P1C_COLLATERAL_PATHS.map((sourcePath) => [sourcePath, 0]),
+  );
+  const correctedBaseSubset = {
+    ...baseSubset,
+    groups: baseSubset.groups.map((group) => ({
+      ...group,
+      paths: group.paths.filter((sourcePath) => {
+        if (!collateralSubsetCounts.has(sourcePath)) return true;
+        if (group.name !== 'language/expressions') {
+          throw new Error(
+            `P1C collateral subset path has the wrong group: ${sourcePath}`,
+          );
+        }
+        collateralSubsetCounts.set(
+          sourcePath,
+          (collateralSubsetCounts.get(sourcePath) ?? 0) + 1,
+        );
+        return false;
+      }),
+    })),
+  };
+  for (const [sourcePath, count] of collateralSubsetCounts) {
+    if (count !== 1) {
+      throw new Error(
+        `P1C collateral subset requires one BASE path: ${sourcePath}`,
+      );
+    }
+  }
   const subsetText = serializeUpstreamSubset(
     mergePromotionSubset(
-      parseUpstreamSubset(options.subsetText),
+      correctedBaseSubset,
       parseEs2015Promotion(promotionText),
     ),
   );
@@ -504,7 +637,30 @@ export function projectP1CCoreOutputs(options) {
   const baselineByPath = new Map(
     options.evidence.baseline.map((entry) => [entry.path, entry]),
   );
+  const collateralBaseByPath = new Map(
+    P1C_COLLATERAL_BASE_CLASSIFICATIONS.map((entry) => [entry.path, entry]),
+  );
+  const collateralBlockedByPath = new Map(
+    P1C_COLLATERAL_BLOCKED_CLASSIFICATIONS.map((entry) => [entry.path, entry]),
+  );
+  const consumedCollateralClassifications = new Set();
   const classifications = baseTaxonomy.classifications.map((entry) => {
+    const collateralBase = collateralBaseByPath.get(entry.path);
+    if (collateralBase !== undefined) {
+      if (JSON.stringify(entry) !== JSON.stringify(collateralBase)) {
+        throw new Error(
+          `P1C collateral BASE classification mismatch: ${entry.path}`,
+        );
+      }
+      consumedCollateralClassifications.add(entry.path);
+      const blocked = collateralBlockedByPath.get(entry.path);
+      if (blocked === undefined) {
+        throw new Error(
+          `P1C collateral blocked classification missing: ${entry.path}`,
+        );
+      }
+      return blocked;
+    }
     const destination = destinations.get(entry.path);
     if (destination === undefined) return entry;
     if (
@@ -521,6 +677,11 @@ export function projectP1CCoreOutputs(options) {
       blocker: null,
     };
   });
+  if (consumedCollateralClassifications.size !== P1C_COLLATERAL_PATHS.length) {
+    throw new Error(
+      'P1C collateral taxonomy does not contain the exact four BASE paths',
+    );
+  }
   return {
     taxonomyText: renderP1CJson({
       ...baseTaxonomy,
@@ -577,11 +738,39 @@ export function buildP1CReportArtifacts(options) {
 
   const report = parseP1CReport(options.reportText);
   const baseRecordsByPath = groupP1CRecords(
-    report.records.filter((record) => !promoted.has(record.file)),
+    report.records.filter(
+      (record) => !promoted.has(record.file) && selected.has(record.file),
+    ),
     'BASE report',
   );
+  const collateralRecordsByPath = groupP1CRecords(
+    report.records.filter((record) =>
+      P1C_COLLATERAL_PATHS.includes(record.file),
+    ),
+    'P1C collateral BASE report',
+  );
+  for (const sourcePath of P1C_COLLATERAL_PATHS) {
+    const records = collateralRecordsByPath.get(sourcePath);
+    if (
+      records?.length !== 2 ||
+      records[0].variant !== 'non-strict' ||
+      records[1].variant !== 'strict' ||
+      records.some(
+        (record) =>
+          record.status !== 'passed' ||
+          JSON.stringify(record.features) !==
+            '["destructuring-binding","default-parameters"]',
+      )
+    ) {
+      throw new Error(`P1C collateral BASE report mismatch: ${sourcePath}`);
+    }
+  }
   for (const record of report.records) {
-    if (!selected.has(record.file) && !promoted.has(record.file)) {
+    if (
+      !selected.has(record.file) &&
+      !promoted.has(record.file) &&
+      !P1C_COLLATERAL_PATHS.includes(record.file)
+    ) {
       throw new Error(`P1C BASE report names a foreign root: ${record.file}`);
     }
   }
@@ -826,6 +1015,7 @@ export async function resolveP1COutputPath(repositoryRootUrl, outputPath) {
  *   assertPinnedCheckout?: (pin: { repository: string, revision: string, checkoutPath: string }) => Promise<void>,
  *   readRoot?: (path: string) => Promise<string>,
  *   readIncludeDefinitions?: () => Promise<ReadonlyMap<string, unknown> | Record<string, unknown>>,
+ *   runCollateralFocused?: typeof runP1CCollateralFocused,
  * }} [dependencies]
  */
 export async function main(argv = [], dependencies = {}) {
@@ -966,6 +1156,8 @@ function writeP1CExecutionSummary(document) {
  *   assertPinnedCheckout?: (pin: { repository: string, revision: string, checkoutPath: string }) => Promise<void>,
  *   readRoot?: (path: string) => Promise<string>,
  *   readIncludeDefinitions?: () => Promise<ReadonlyMap<string, unknown> | Record<string, unknown>>,
+ *   environment?: Record<string, string | undefined>,
+ *   runCollateralFocused?: typeof runP1CCollateralFocused,
  * }} dependencies
  */
 async function buildP1CScratch(options, dependencies) {
@@ -1033,6 +1225,7 @@ async function buildP1CScratch(options, dependencies) {
       REPOSITORY_ROOT_URL,
     ),
   });
+  const engine = createJsjsTest262Engine();
   const readRoot =
     dependencies.readRoot ?? ((sourcePath) => host.readTest(sourcePath));
   const readIncludeDefinitions =
@@ -1044,6 +1237,14 @@ async function buildP1CScratch(options, dependencies) {
     taxonomy,
     readRoot,
     includeDefinitions: await readIncludeDefinitions(),
+  });
+  const collateralExecution = await (
+    dependencies.runCollateralFocused ?? runP1CCollateralFocused
+  )({
+    environment: dependencies.environment ?? process.env,
+    host,
+    engine,
+    supportedFeatures: featureNames(parseFeatureManifest(featuresText)),
   });
   const evidence = buildP1CAuthorityEvidence({
     ledgerText,
@@ -1057,6 +1258,7 @@ async function buildP1CScratch(options, dependencies) {
     subsetText,
     evidence,
     execution,
+    collateralExecution,
     inventory,
   });
   const reportArtifacts = buildP1CReportArtifacts({
@@ -1139,6 +1341,7 @@ async function buildP1CScratch(options, dependencies) {
     ['projected/tools/test262/es2015-taxonomy.json', projectedTaxonomyText],
     ['projected/tools/test262/upstream-subset.json', projectedCore.subsetText],
     ['authority-record.json', renderP1CJson(authority)],
+    ['collateral-execution.json', renderP1CJson(collateralExecution)],
     ['protected-projection.json', renderP1CJson(protectedProjection)],
   ]);
   const byPath = groupP1CRecords(execution.records, 'P1C scratch execution');
@@ -1165,6 +1368,14 @@ async function buildP1CScratch(options, dependencies) {
       completePassVariants,
       residualRoots: P1C.roots - completePassRoots,
       residualVariants: P1C.variants - completePassVariants,
+    },
+    collateral: {
+      roots: P1C_COLLATERAL_PATHS.length,
+      variants: collateralExecution.records.length,
+      failed: collateralExecution.records.filter(
+        (record) => record.status === 'failed',
+      ).length,
+      sha256: sha256(renderP1CJson(collateralExecution)),
     },
     authoritySha256: sha256(`${JSON.stringify(authority)}\n`),
     protectedProjectionSha256,
@@ -1361,6 +1572,46 @@ function validateP1CExecution(execution, baseline) {
   const paths = baseline.map((entry) => entry.path);
   const classifications = new Map(baseline.map((entry) => [entry.path, entry]));
   return validateP1CRecords(execution.records, paths, classifications);
+}
+
+/**
+ * @param {P1CCollateralExecution} execution
+ * @returns {readonly P1CExecutionRecord[]}
+ */
+function validateP1CCollateralExecution(execution) {
+  if (
+    execution?.version !== 1 ||
+    !Array.isArray(execution?.paths) ||
+    JSON.stringify(execution.paths) !== JSON.stringify(P1C_COLLATERAL_PATHS) ||
+    !Array.isArray(execution?.records) ||
+    execution.records.length !== P1C_COLLATERAL_PATHS.length * 2
+  ) {
+    throw new Error('P1C collateral execution has the wrong exact identity');
+  }
+  const variants = ['non-strict', 'strict'];
+  for (let index = 0; index < execution.records.length; index += 1) {
+    const record = execution.records[index];
+    const sourcePath = P1C_COLLATERAL_PATHS[Math.floor(index / 2)];
+    const variant = variants[index % 2];
+    const classification =
+      P1C_COLLATERAL_BASE_CLASSIFICATIONS[Math.floor(index / 2)];
+    if (
+      record?.type !== 'test' ||
+      record.file !== sourcePath ||
+      record.variant !== variant ||
+      record.status !== 'failed' ||
+      record.reason !== 'parse-error' ||
+      record.message !==
+        'SyntaxError: rest elements are not supported in this context' ||
+      JSON.stringify(record.features) !==
+        JSON.stringify(classification.features)
+    ) {
+      throw new Error(
+        `P1C collateral execution drift: ${sourcePath} (${variant})`,
+      );
+    }
+  }
+  return execution.records;
 }
 
 /**
@@ -1700,6 +1951,7 @@ async function writeP1CScratchBundle(scratchRoot, files) {
   const staging = path.join(scratchRoot, `.build-${randomUUID()}`);
   const topLevelFiles = [
     'authority-record.json',
+    'collateral-execution.json',
     'protected-projection.json',
     'summary.json',
   ];

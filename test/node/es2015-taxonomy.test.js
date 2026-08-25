@@ -18,14 +18,22 @@ import {
   createAuditDependencies,
   Es2015AuditError,
   main as auditEs2015Taxonomy,
+  reverseP1CCollateralTaxonomy,
   validateDefaultH0AuditReconciliation,
 } from '../../tools/test262/es2015-audit.js';
 import {
   ES2015_PROVENANCE_DECISION_CODES,
   ES2015_PROVENANCE_FILE,
   buildProvenanceFoundation,
+  canonicalRoadmapAuthoritySha256,
   parseEs2015ProvenanceManifest,
 } from '../../tools/test262/es2015-provenance.js';
+import {
+  P1C_COLLATERAL_BASE_CLASSIFICATIONS,
+  P1C_COLLATERAL_BLOCKED_CLASSIFICATIONS,
+  P1C_COLLATERAL_PATHS,
+  P1C_CORRECTED_APPLIED_RECORD_SHA256,
+} from '../../tools/test262/es2015-p1c-collateral.js';
 import {
   ES2015_H0_BASELINE_FILE,
   buildEs2015H0Baseline,
@@ -1067,6 +1075,60 @@ function auditDependencies(options = {}) {
   };
 }
 
+/** @param {Record<string, any>} authority */
+function auditP1CProductionAuthorityDependencies(authority) {
+  const roots = new Map(AUDIT_ROOTS);
+  roots.set(
+    AUDIT_P1C_PATH,
+    '/*---\ndescription: P1C promotion fixture.\nes6id: 13.15\nfeatures: [destructuring-binding]\nincludes: [p1cHelper.js]\n---*/\n',
+  );
+  const productionManifest = JSON.parse(
+    readFileSyncText(
+      new URL(`../../${ES2015_PROVENANCE_FILE}`, import.meta.url),
+      'utf8',
+    ),
+  );
+  productionManifest.roadmapAuthorities = [authority];
+  return auditDependencies({
+    roots,
+    subset: AUDIT_P1C_SUBSET,
+    promotion: AUDIT_PROMOTION,
+    auditEvidence: auditEvidence({
+      auditRecords: [...AUDIT_RECORDS, ...AUDIT_P1C_RECORDS],
+    }),
+    includeDefinitions: new Map([
+      ['p1cHelper.js', { features: ['p1c-include-feature'], includes: [] }],
+    ]),
+    files: new Map([
+      [
+        'tools/test262/es2015-policy.json',
+        JSON.stringify({
+          ...JSON.parse(POLICY),
+          es2015Features: ['destructuring-binding', 'let'],
+          neutralFeatures: ['cross-realm', 'p1c-include-feature'],
+        }),
+      ],
+      ['tools/test262/es2015-p1c-promotion.json', AUDIT_P1C_PROMOTION],
+      ['tools/test262/es2015-p1c-disposition.json', AUDIT_P1C_DISPOSITION],
+    ]),
+    readProvenanceManifest: async () =>
+      `${JSON.stringify(productionManifest, null, 2)}\n`,
+    readDecisionFragments: async () =>
+      new Map(
+        ES2015_PROVENANCE_DECISION_CODES.map((code) => [
+          code,
+          readFileSyncText(
+            new URL(
+              `../../${PROVENANCE_DECISIONS_DIRECTORY}/${code}.json`,
+              import.meta.url,
+            ),
+            'utf8',
+          ),
+        ]),
+      ),
+  });
+}
+
 /** @param {string} outputPath */
 function fixtureOutputPath(outputPath) {
   if (!path.isAbsolute(outputPath)) {
@@ -1978,6 +2040,188 @@ export default [
           ownerMapSha256: disposition.ownerMapSha256,
         }),
       );
+    },
+  },
+  {
+    name: 'ES2015 audit reverses exact corrected P1C collateral for historical H0 reconstruction',
+    run: () => {
+      const manifest = parseEs2015ProvenanceManifest(
+        readFileSyncText(
+          new URL(`../../${ES2015_PROVENANCE_FILE}`, import.meta.url),
+          'utf8',
+        ),
+      );
+      const authority = globalThis.structuredClone(
+        manifest.roadmapAuthorities.find(
+          (/** @type {any} */ entry) => entry.code === 'P1C',
+        ),
+      );
+      authority.state = 'applied';
+      assertSame(
+        canonicalRoadmapAuthoritySha256(authority),
+        P1C_CORRECTED_APPLIED_RECORD_SHA256,
+      );
+
+      const foreign = {
+        path: 'test/language/expressions/foreign-preserved.js',
+        variants: 2,
+        partition: 'core',
+        status: 'selected-passing',
+        blocker: null,
+        features: ['let'],
+        flags: [],
+        includes: [],
+        provenance: ['feature:let'],
+      };
+      const taxonomyText = `${JSON.stringify(
+        {
+          classifications: [foreign, ...P1C_COLLATERAL_BLOCKED_CLASSIFICATIONS],
+        },
+        null,
+        2,
+      )}\n`;
+      const reversed = JSON.parse(
+        reverseP1CCollateralTaxonomy(taxonomyText, authority),
+      );
+
+      assertSame(
+        JSON.stringify(reversed.classifications),
+        JSON.stringify([foreign, ...P1C_COLLATERAL_BASE_CLASSIFICATIONS]),
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit rejects P1C collateral authority and classification drift',
+    run: () => {
+      const manifest = parseEs2015ProvenanceManifest(
+        readFileSyncText(
+          new URL(`../../${ES2015_PROVENANCE_FILE}`, import.meta.url),
+          'utf8',
+        ),
+      );
+      const pendingAuthority = globalThis.structuredClone(
+        manifest.roadmapAuthorities.find(
+          (/** @type {any} */ entry) => entry.code === 'P1C',
+        ),
+      );
+      const authority = globalThis.structuredClone(pendingAuthority);
+      authority.state = 'applied';
+      const taxonomy = {
+        classifications: [
+          {
+            path: 'test/language/expressions/foreign-preserved.js',
+            variants: 2,
+            partition: 'core',
+            status: 'selected-passing',
+            blocker: null,
+            features: ['let'],
+            flags: [],
+            includes: [],
+            provenance: ['feature:let'],
+          },
+          ...P1C_COLLATERAL_BLOCKED_CLASSIFICATIONS,
+        ],
+      };
+      const taxonomyText = `${JSON.stringify(taxonomy, null, 2)}\n`;
+      const staleManifestText = readRepositoryGitFile(
+        'a085d445648d4e1d059b884459b90ee693268ba7',
+        ES2015_PROVENANCE_FILE,
+      );
+      if (staleManifestText === null) {
+        throw new Error('stale applied P1C authority fixture is unavailable');
+      }
+      const staleAuthority = parseEs2015ProvenanceManifest(
+        staleManifestText,
+      ).roadmapAuthorities.find(
+        (/** @type {any} */ entry) => entry.code === 'P1C',
+      );
+      assertSame(
+        canonicalRoadmapAuthoritySha256(staleAuthority),
+        '9049c137bbd42c82c6277c689d3313928b4fc7ac10aa785bf81d1dd690141897',
+      );
+      const alternateAuthority = globalThis.structuredClone(authority);
+      alternateAuthority.issue = 117;
+      for (const rejectedAuthority of [
+        pendingAuthority,
+        staleAuthority,
+        alternateAuthority,
+      ]) {
+        assertSame(
+          assertThrows(
+            () => reverseP1CCollateralTaxonomy(taxonomyText, rejectedAuthority),
+            Es2015AuditError,
+          ).message,
+          'Applied P1C collateral reversal requires the exact corrected authority',
+        );
+      }
+
+      /** @type {Array<(classifications: any[]) => void>} */
+      const mutations = [
+        (classifications) => {
+          classifications.splice(1, 1);
+        },
+        (classifications) => {
+          classifications.splice(
+            2,
+            0,
+            globalThis.structuredClone(classifications[1]),
+          );
+        },
+        (classifications) => {
+          [classifications[1], classifications[2]] = [
+            classifications[2],
+            classifications[1],
+          ];
+        },
+        (classifications) => {
+          classifications[1].variants = 1;
+        },
+        (classifications) => {
+          classifications[1].partition = 'annex-b';
+        },
+        (classifications) => {
+          classifications[1].features = ['destructuring-binding'];
+        },
+        (classifications) => {
+          classifications[1].flags = [];
+        },
+        (classifications) => {
+          classifications[1].includes = ['compareArray.js'];
+        },
+        (classifications) => {
+          classifications[1].provenance = ['feature:default-parameters'];
+        },
+        (classifications) => {
+          classifications[1].status = 'selected-passing';
+        },
+        (classifications) => {
+          classifications[1].blocker = null;
+        },
+        (classifications) => {
+          classifications.push({
+            ...globalThis.structuredClone(
+              P1C_COLLATERAL_BLOCKED_CLASSIFICATIONS[0],
+            ),
+            path: 'test/language/expressions/arrow-function/dstr/foreign-collateral.js',
+          });
+        },
+      ];
+      for (const mutate of mutations) {
+        const drifted = globalThis.structuredClone(taxonomy);
+        mutate(drifted.classifications);
+        assertSame(
+          assertThrows(
+            () =>
+              reverseP1CCollateralTaxonomy(
+                `${JSON.stringify(drifted, null, 2)}\n`,
+                authority,
+              ),
+            Es2015AuditError,
+          ).message.includes('P1C collateral taxonomy'),
+          true,
+        );
+      }
+      assertSame(P1C_COLLATERAL_PATHS.length, 4);
     },
   },
   {
@@ -2986,6 +3230,99 @@ export default [
         JSON.stringify(p1cClassification?.features),
         '["destructuring-binding"]',
       );
+    },
+  },
+  {
+    name: 'ES2015 audit omits serialization-only P1C hashes only for exact corrected applied authority',
+    run: async () => {
+      const manifest = parseEs2015ProvenanceManifest(
+        readFileSyncText(
+          new URL(`../../${ES2015_PROVENANCE_FILE}`, import.meta.url),
+          'utf8',
+        ),
+      );
+      const authority = globalThis.structuredClone(
+        manifest.roadmapAuthorities.find(
+          (/** @type {any} */ entry) => entry.code === 'P1C',
+        ),
+      );
+      authority.state = 'applied';
+      assertSame(
+        canonicalRoadmapAuthoritySha256(authority),
+        P1C_CORRECTED_APPLIED_RECORD_SHA256,
+      );
+      const dependencies = auditP1CProductionAuthorityDependencies(authority);
+
+      assertSame(await auditEs2015Taxonomy([], dependencies), 0);
+      const artifact = JSON.parse(fixtureOutput(dependencies, AUDIT_PATH));
+      const p1cClassification = artifact.classifications.find(
+        (/** @type {any} */ entry) => entry.path === AUDIT_P1C_PATH,
+      );
+
+      assertSame(
+        Object.prototype.hasOwnProperty.call(
+          artifact.inputs,
+          'p1cDispositionSha256',
+        ),
+        false,
+      );
+      assertSame(
+        Object.prototype.hasOwnProperty.call(
+          artifact.inputs,
+          'p1cPromotionSha256',
+        ),
+        false,
+      );
+      assertSame(artifact.inputs.promotionSha256, sha256(AUDIT_PROMOTION));
+      assertSame(p1cClassification?.status, 'selected-passing');
+      assertSame(
+        JSON.stringify(p1cClassification?.features),
+        '["destructuring-binding"]',
+      );
+    },
+  },
+  {
+    name: 'ES2015 audit rejects stale or alternate applied P1C serialization authority',
+    run: async () => {
+      const staleManifestText = readRepositoryGitFile(
+        'a085d445648d4e1d059b884459b90ee693268ba7',
+        ES2015_PROVENANCE_FILE,
+      );
+      if (staleManifestText === null) {
+        throw new Error('stale applied P1C authority fixture is unavailable');
+      }
+      const staleAuthority = parseEs2015ProvenanceManifest(
+        staleManifestText,
+      ).roadmapAuthorities.find(
+        (/** @type {any} */ entry) => entry.code === 'P1C',
+      );
+      const manifest = parseEs2015ProvenanceManifest(
+        readFileSyncText(
+          new URL(`../../${ES2015_PROVENANCE_FILE}`, import.meta.url),
+          'utf8',
+        ),
+      );
+      const alternateAuthority = globalThis.structuredClone(
+        manifest.roadmapAuthorities.find(
+          (/** @type {any} */ entry) => entry.code === 'P1C',
+        ),
+      );
+      alternateAuthority.state = 'applied';
+      alternateAuthority.issue = 117;
+
+      for (const authority of [staleAuthority, alternateAuthority]) {
+        const error = await rejected(() =>
+          auditEs2015Taxonomy(
+            [],
+            auditP1CProductionAuthorityDependencies(authority),
+          ),
+        );
+        assertSame(error instanceof Es2015AuditError, true);
+        assertSame(
+          error.message,
+          'Applied P1C audit serialization requires the exact corrected authority',
+        );
+      }
     },
   },
   {
